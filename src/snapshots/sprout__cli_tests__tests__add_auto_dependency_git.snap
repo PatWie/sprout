@@ -1,0 +1,164 @@
+---
+source: src/cli_tests.rs
+expression: manifest_content
+---
+module fd {
+    depends_on = []
+    fetch {
+        git = {
+            url = https://github.com/sharkdp/fd.git
+        }
+    }
+    build {
+        sh autogen.sh
+        ./configure --prefix=${DIST_PATH}
+        make
+    }
+}
+
+module fzf {
+    depends_on = []
+    exports = {
+        PATH = "/bin"
+    }
+    fetch {
+        git = {
+            url = https://github.com/junegunn/fzf.git
+        }
+    }
+    build {
+        go build
+        mkdir -p ${DIST_PATH}/bin
+        cp fzf ${DIST_PATH}/bin/
+    }
+}
+
+module gcc {
+    depends_on = []
+    exports = {
+        PATH = "/bin"
+    }
+    fetch {
+        http = {
+            url = https://mirrors.ibiblio.org/gnu/gcc/gcc-15.1.0/gcc-15.1.0.tar.xz
+        }
+    }
+    build {
+        cd gcc-15.1.0
+        ./contrib/download_prerequisites
+        mkdir -p build
+        cd build
+        ../configure --prefix=${DIST_PATH} --enable-languages=c,c++ --disable-multilib
+        make -j8
+        make install
+    }
+}
+
+module go {
+    depends_on = []
+    exports = {
+        PATH = "/go/bin"
+    }
+    fetch {
+        http = {
+            url = https://go.dev/dl/go1.25.2.linux-amd64.tar.gz
+            sha256 = d7fa7f8fbd16263aa2501d681b11f972a5fd8e811f7b10cb9b26d031a3d7454b
+        }
+    }
+    build {
+        ln -sf ${SOURCE_PATH}/go ${DIST_PATH}/go
+    }
+}
+
+module go-tools {
+    depends_on = [go]
+    exports = {
+        PATH = "/bin"
+    }
+    build {
+        env {
+            GOBIN = "${DIST_PATH}/bin"
+            GOPROXY = "direct"
+            PATH = "${SPROUT_DIST}/go/go/bin:${PATH}"
+        }
+        go install github.com/jesseduffield/lazygit@v0.55.1
+    }
+}
+
+module neovim {
+    depends_on = [gcc]
+    exports = {
+        PATH = "/bin"
+    }
+    fetch {
+        git = {
+            url = https://github.com/neovim/neovim.git
+            ref = v0.11.4
+        }
+    }
+    build {
+        env {
+            CC = "/sprout/dist/gcc/bin/gcc"
+            CXX = "/sprout/dist/gcc/bin/g++"
+        }
+        make -j8 CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX=${DIST_PATH}"
+        make install
+    }
+}
+
+module rust {
+    depends_on = []
+    exports = {
+        PATH = "/bin"
+    }
+    fetch {
+        http = {
+            url = https://static.rust-lang.org/dist/rust-1.90.0-x86_64-unknown-linux-gnu.tar.xz
+        }
+    }
+    build {
+        cd rust-1.90.0-x86_64-unknown-linux-gnu
+        ./install.sh --prefix=${DIST_PATH}
+    }
+}
+
+module rust-tools {
+    depends_on = [rust]
+    exports = {
+        PATH = "/bin"
+    }
+    build {
+        env {
+            PATH = "${SPROUT_DIST}/rust/bin:${PATH}"
+        }
+        cargo install --root ${DIST_PATH} hyperfine --version 1.18.0
+        cargo install --root ${DIST_PATH} ripgrep --version 14.1.1
+        cargo install --root ${DIST_PATH} fd-find --version 10.2.0
+        cargo install --root ${DIST_PATH} bat --version 0.24.0
+    }
+}
+
+module test {
+    depends_on = [go]
+    exports = {
+        PATH = "/bin"
+    }
+    build {
+        env {
+            GOBIN = "${DIST_PATH}/bin"
+            PATH = "${SPROUT_DIST}/go/go/bin:${PATH}"
+        }
+        echo "SPROUT_DIST=${SPROUT_DIST}"
+        echo "DIST_PATH=${DIST_PATH}"
+        echo "GOBIN=${GOBIN}"
+        echo "SOURCE_PATH=${SOURCE_PATH}"
+        go version
+    }
+}
+
+environments {
+    default = [fzf, go, go-tools, rust-tools, rust]
+
+    dev = [fzf, go, go-tools, rust-tools, rust, gcc, neovim]
+
+}

@@ -1,0 +1,92 @@
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+COMMENT = _{ "#" ~ (!"\n" ~ ANY)* }
+
+// Top-level manifest
+manifest = { SOI ~ statement* ~ EOI }
+statement = { module_block | environments_block }
+
+// Package block: module name { ... }
+module_block = { "module" ~ module_id ~ "{" ~ module_field* ~ "}" }
+module_id = { identifier }
+
+module_field = {
+    depends_on_field |
+    exports_field |
+    fetch_block |
+    build_block |
+    install_block |
+    update_block
+}
+
+depends_on_field = { "depends_on" ~ "=" ~ array }
+exports_field = { "exports" ~ "=" ~ exports_map }
+
+// Fetch block
+fetch_block = { "fetch" ~ "{" ~ fetch_spec ~ "}" }
+fetch_spec = {
+    git_spec |
+    http_spec |
+    local_spec
+}
+
+git_spec = { "git" ~ "=" ~ "{" ~ git_field* ~ "}" }
+git_field = {
+    git_url_field |
+    git_ref_field |
+    git_recursive_field
+}
+
+git_url_field = { "url" ~ "=" ~ value }
+git_ref_field = { "ref" ~ "=" ~ value }
+git_recursive_field = { "recursive" ~ "=" ~ boolean }
+
+http_spec = { "http" ~ "=" ~ "{" ~ http_field* ~ "}" }
+http_field = {
+    http_url_field |
+    http_sha256_field
+}
+
+http_url_field = { "url" ~ "=" ~ value }
+http_sha256_field = { "sha256" ~ "=" ~ value }
+
+local_spec = { "local" ~ "=" ~ "{" ~ local_field* ~ "}" }
+local_field = { "path" ~ "=" ~ value }
+
+// Script blocks
+build_block = { "build" ~ "{" ~ script_content ~ "}" }
+install_block = { "install" ~ "{" ~ script_content ~ "}" }
+update_block = { "update" ~ "{" ~ script_content ~ "}" }
+
+script_content = { (env_block | command_line)* }
+env_block = { "env" ~ "{" ~ env_entry* ~ "}" }
+env_entry = { identifier ~ "=" ~ string }
+
+// Command lines - any line that's not an env block
+command_line = @{ (!("env" | "}") ~ (!"\n" ~ ANY)+) }
+
+// Environments block
+environments_block = { "environments" ~ "{" ~ environment_entry* ~ "}" }
+environment_entry = { identifier ~ "=" ~ array }
+
+// Basic types
+array = { "[" ~ (value ~ ("," ~ value)*)? ~ "]" }
+map = { "{" ~ (map_entry ~ ("," ~ map_entry)*)? ~ "}" }
+map_entry = { identifier ~ "=" ~ value }
+
+// Exports map - values must be quoted strings, no commas required
+exports_map = { "{" ~ exports_entry* ~ "}" }
+exports_entry = { identifier ~ "=" ~ string }
+
+// Value can be either quoted string or unquoted value
+value = { string | unquoted_value }
+
+string = @{ "\"" ~ string_inner ~ "\"" }
+string_inner = @{ (!("\"" | "\\") ~ ANY | "\\" ~ ("\"" | "\\" | "n" | "r" | "t"))* }
+
+// Unquoted value - anything that's not whitespace, comma, brace, or bracket
+unquoted_value = @{ (!(" " | "\t" | "\n" | "\r" | "," | "{" | "}" | "[" | "]") ~ ANY)+ }
+
+number = @{ ASCII_DIGIT+ }
+boolean = @{ "true" | "false" }
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+version_identifier = @{ (ASCII_ALPHANUMERIC | "_" | "-" | ".")+ }

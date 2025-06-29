@@ -1,0 +1,5 @@
+---
+source: src/symlink_tests.rs
+expression: state
+---
+=== symlinks/ structure ===

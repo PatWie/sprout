@@ -1,0 +1,5 @@
+---
+source: src/cli_tests.rs
+expression: manifest_content
+---
+

@@ -1,0 +1,13 @@
+---
+source: src/cli_tests.rs
+expression: manifest_content
+---
+module ripgrep {
+    depends_on = []
+    fetch {
+        git = {
+            url = https://github.com/BurntSushi/ripgrep.git
+            ref = 14.1.1
+        }
+    }
+}

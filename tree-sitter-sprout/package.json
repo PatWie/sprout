@@ -1,0 +1,14 @@
+{
+  "name": "tree-sitter-sprout",
+  "version": "0.1.0",
+  "description": "Sprout grammar for tree-sitter",
+  "main": "bindings/node",
+  "tree-sitter": [
+    {
+      "scope": "source.sprout",
+      "file-types": ["sprout"],
+      "highlights": "queries/highlights.scm",
+      "injections": "queries/injections.scm"
+    }
+  ]
+}
