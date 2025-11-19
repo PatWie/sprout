@@ -170,116 +170,127 @@ fn parse_module_block(pair: pest::iterators::Pair<Rule>) -> Result<ModuleBlock> 
 }
 
 fn parse_fetch_block(pair: pest::iterators::Pair<Rule>) -> Result<FetchBlock> {
-    let fetch_spec = pair
-        .into_inner()
-        .next()
-        .ok_or_else(|| anyhow!("Missing fetch spec"))?;
-    let fetch_rule = fetch_spec.as_rule(); // Store the rule before consuming
-    debug!("Parsing fetch spec with rule: {:?}", fetch_rule);
+    let mut spec = None;
+    let mut output = None;
 
-    let spec = match fetch_rule {
-        Rule::fetch_spec => {
-            // Handle the fetch_spec wrapper by processing its inner content
-            let inner_spec = fetch_spec
-                .into_inner()
-                .next()
-                .ok_or_else(|| anyhow!("Missing inner fetch spec"))?;
-            let inner_rule = inner_spec.as_rule();
-            debug!("Inner fetch spec rule: {:?}", inner_rule);
-
-            match inner_rule {
-                Rule::git_spec => {
-                    let mut url = None;
-                    let mut ref_ = None;
-                    let mut recursive = false;
-
-                    for field in inner_spec.into_inner() {
-                        if field.as_rule() == Rule::git_field {
-                            let inner_field = field.into_inner().next().unwrap();
-                            match inner_field.as_rule() {
-                                Rule::git_url_field => {
-                                    let mut parts = inner_field.into_inner();
-                                    let value = parts.next().unwrap();
-                                    url = Some(parse_value(value)?);
-                                }
-                                Rule::git_ref_field => {
-                                    let mut parts = inner_field.into_inner();
-                                    let value = parts.next().unwrap();
-                                    ref_ = Some(parse_value(value)?);
-                                }
-                                Rule::git_recursive_field => {
-                                    let mut parts = inner_field.into_inner();
-                                    let value = parts.next().unwrap();
-                                    recursive = parse_value(value)? == "true";
-                                }
-                                _ => {}
-                            }
-                        }
+    for field in pair.into_inner() {
+        match field.as_rule() {
+            Rule::fetch_field => {
+                let inner = field.into_inner().next().ok_or_else(|| anyhow!("Empty fetch field"))?;
+                match inner.as_rule() {
+                    Rule::fetch_output_field => {
+                        let value = inner.into_inner().next().ok_or_else(|| anyhow!("Missing output value"))?;
+                        output = Some(parse_value(value)?);
                     }
-
-                    FetchSpec::Git(GitSpec {
-                        url: url.ok_or_else(|| anyhow!("Git spec missing url"))?,
-                        ref_,
-                        recursive,
-                    })
-                }
-                Rule::http_spec => {
-                    let mut url = None;
-                    let mut sha256 = None;
-
-                    for field in inner_spec.into_inner() {
-                        if field.as_rule() == Rule::http_field {
-                            let inner_field = field.into_inner().next().unwrap();
-                            match inner_field.as_rule() {
-                                Rule::http_url_field => {
-                                    let mut parts = inner_field.into_inner();
-                                    let value = parts.next().unwrap();
-                                    url = Some(parse_value(value)?);
-                                }
-                                Rule::http_sha256_field => {
-                                    let mut parts = inner_field.into_inner();
-                                    let value = parts.next().unwrap();
-                                    sha256 = Some(parse_value(value)?);
-                                }
-                                _ => {}
-                            }
-                        }
+                    Rule::fetch_spec => {
+                        spec = Some(parse_fetch_spec(inner)?);
                     }
-
-                    FetchSpec::Http(HttpSpec {
-                        url: url.ok_or_else(|| anyhow!("HTTP spec missing url"))?,
-                        sha256,
-                    })
-                }
-                Rule::local_spec => {
-                    let mut path = None;
-
-                    for field in inner_spec.into_inner() {
-                        if field.as_rule() == Rule::local_field {
-                            // local_field contains: "path" ~ "=" ~ value
-                            // field.as_str() gives us the full text like "path = /some/path"
-                            // field.into_inner() gives us only the value token
-                            let value = field.into_inner().next().unwrap(); // Only the value token
-                            path = Some(parse_value(value)?);
-                        }
-                    }
-
-                    FetchSpec::Local(LocalSpec {
-                        path: path.ok_or_else(|| anyhow!("Local spec missing path"))?,
-                    })
-                }
-                _ => {
-                    return Err(anyhow!(
-                        "Unsupported inner fetch spec type: {:?}",
-                        inner_rule
-                    ));
+                    _ => {}
                 }
             }
+            _ => {}
         }
-        _ => return Err(anyhow!("Unsupported fetch spec type")),
-    };
+    }
 
-    Ok(FetchBlock { spec })
+    Ok(FetchBlock {
+        spec: spec.ok_or_else(|| anyhow!("Missing fetch spec"))?,
+        output,
+    })
+}
+
+fn parse_fetch_spec(fetch_spec: pest::iterators::Pair<Rule>) -> Result<FetchSpec> {
+    let inner_spec = fetch_spec
+        .into_inner()
+        .next()
+        .ok_or_else(|| anyhow!("Missing inner fetch spec"))?;
+    let inner_rule = inner_spec.as_rule();
+    debug!("Inner fetch spec rule: {:?}", inner_rule);
+
+    match inner_rule {
+        Rule::git_spec => {
+            let mut url = None;
+            let mut ref_ = None;
+            let mut recursive = false;
+
+            for field in inner_spec.into_inner() {
+                if field.as_rule() == Rule::git_field {
+                    let inner_field = field.into_inner().next().unwrap();
+                    match inner_field.as_rule() {
+                        Rule::git_url_field => {
+                            let mut parts = inner_field.into_inner();
+                            let value = parts.next().unwrap();
+                            url = Some(parse_value(value)?);
+                        }
+                        Rule::git_ref_field => {
+                            let mut parts = inner_field.into_inner();
+                            let value = parts.next().unwrap();
+                            ref_ = Some(parse_value(value)?);
+                        }
+                        Rule::git_recursive_field => {
+                            let mut parts = inner_field.into_inner();
+                            let value = parts.next().unwrap();
+                            recursive = parse_value(value)? == "true";
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            Ok(FetchSpec::Git(GitSpec {
+                url: url.ok_or_else(|| anyhow!("Git spec missing url"))?,
+                ref_,
+                recursive,
+            }))
+        }
+        Rule::http_spec => {
+            let mut url = None;
+            let mut sha256 = None;
+
+            for field in inner_spec.into_inner() {
+                if field.as_rule() == Rule::http_field {
+                    let inner_field = field.into_inner().next().unwrap();
+                    match inner_field.as_rule() {
+                        Rule::http_url_field => {
+                            let mut parts = inner_field.into_inner();
+                            let value = parts.next().unwrap();
+                            url = Some(parse_value(value)?);
+                        }
+                        Rule::http_sha256_field => {
+                            let mut parts = inner_field.into_inner();
+                            let value = parts.next().unwrap();
+                            sha256 = Some(parse_value(value)?);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            Ok(FetchSpec::Http(HttpSpec {
+                url: url.ok_or_else(|| anyhow!("HTTP spec missing url"))?,
+                sha256,
+            }))
+        }
+        Rule::local_spec => {
+            let mut path = None;
+
+            for field in inner_spec.into_inner() {
+                if field.as_rule() == Rule::local_field {
+                    let value = field.into_inner().next().unwrap();
+                    path = Some(parse_value(value)?);
+                }
+            }
+
+            Ok(FetchSpec::Local(LocalSpec {
+                path: path.ok_or_else(|| anyhow!("Local spec missing path"))?,
+            }))
+        }
+        _ => {
+            Err(anyhow!(
+                "Unsupported inner fetch spec type: {:?}",
+                inner_rule
+            ))
+        }
+    }
 }
 
 fn parse_script_block(pair: pest::iterators::Pair<Rule>) -> Result<ScriptBlock> {

@@ -52,6 +52,7 @@ impl ModuleBlock {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FetchBlock {
     pub spec: FetchSpec,
+    pub output: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -186,6 +187,9 @@ impl PrettyPrint for ModuleBlock {
         if let Some(fetch) = &self.fetch {
             output.push_str("    fetch {\n");
             output.push_str(&fetch.spec.pretty_print());
+            if let Some(output_name) = &fetch.output {
+                output.push_str(&format!("        output = {}\n", output_name));
+            }
             output.push_str("    }\n");
         }
         

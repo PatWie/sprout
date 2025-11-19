@@ -50,8 +50,17 @@ module.exports = grammar({
     fetch_block: $ => seq(
       'fetch',
       '{',
-      $._fetch_spec,
+      repeat(choice(
+        $._fetch_spec,
+        $.fetch_output_field
+      )),
       '}'
+    ),
+
+    fetch_output_field: $ => seq(
+      alias('output', $.field_name),
+      '=',
+      $.value
     ),
 
     _fetch_spec: $ => choice(

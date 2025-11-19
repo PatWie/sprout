@@ -554,8 +554,14 @@ fn fetch_archive(sprout_path: &str, package: &ModuleBlock, archive: &crate::ast:
     }
     fs::create_dir_all(&source_path)?;
 
+    // Use custom output filename if specified
+    let output_filename = package.fetch.as_ref()
+        .and_then(|f| f.output.as_ref())
+        .map(|s| s.as_str())
+        .unwrap_or(original_filename);
+
     info!("Extracting {} -> {}", original_filename, source_path.display());
-    extract_archive(&cache_path, &source_path, original_filename)?;
+    extract_archive_with_output(&cache_path, &source_path, original_filename, output_filename)?;
     Ok(())
 }
 
@@ -621,7 +627,7 @@ fn compute_file_sha256(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn extract_archive(cache_path: &Path, dest: &Path, filename: &str) -> Result<()> {
+fn extract_archive_with_output(cache_path: &Path, dest: &Path, filename: &str, output_name: &str) -> Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
     use std::time::Duration;
 
@@ -654,19 +660,19 @@ fn extract_archive(cache_path: &Path, dest: &Path, filename: &str) -> Result<()>
     } else if filename.ends_with(".gz") {
         let gz_file = std::fs::File::open(cache_path)?;
         let mut decoder = flate2::read::GzDecoder::new(gz_file);
-        let output_name = filename.strip_suffix(".gz").unwrap_or(filename);
         let output_path = dest.join(output_name);
         let mut output_file = std::fs::File::create(output_path)?;
         std::io::copy(&mut decoder, &mut output_file)?;
     } else if filename.ends_with(".xz") {
         let xz_file = std::fs::File::open(cache_path)?;
         let mut decoder = xz::read::XzDecoder::new(xz_file);
-        let output_name = filename.strip_suffix(".xz").unwrap_or(filename);
         let output_path = dest.join(output_name);
         let mut output_file = std::fs::File::create(output_path)?;
         std::io::copy(&mut decoder, &mut output_file)?;
     } else {
-        return Err(anyhow!("Unsupported archive format: {}", filename));
+        // Raw file - just copy it with the specified output name
+        let output_path = dest.join(output_name);
+        std::fs::copy(cache_path, &output_path)?;
     }
 
     if let Some(pb) = pb {

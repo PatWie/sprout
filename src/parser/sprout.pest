@@ -22,7 +22,14 @@ depends_on_field = { "depends_on" ~ "=" ~ array }
 exports_field = { "exports" ~ "=" ~ exports_map }
 
 // Fetch block
-fetch_block = { "fetch" ~ "{" ~ fetch_spec ~ "}" }
+fetch_block = { "fetch" ~ "{" ~ fetch_field* ~ "}" }
+fetch_field = {
+    fetch_spec |
+    fetch_output_field
+}
+
+fetch_output_field = { "output" ~ "=" ~ value }
+
 fetch_spec = {
     git_spec |
     http_spec |
