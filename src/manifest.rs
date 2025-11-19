@@ -121,6 +121,7 @@ mod tests {
                     ref_: Some("v1.0".to_string()),
                     recursive: false,
                 }),
+                output: None,
             }),
             build: Some(ScriptBlock {
                 env: vec![("CC".to_string(), "gcc".to_string())],

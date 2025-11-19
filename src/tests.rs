@@ -20,6 +20,7 @@ mod tests {
                     ref_: Some("v8.7.0".to_string()),
                     recursive: false,
                 }),
+                output: None,
             }),
             build: Some(ScriptBlock {
                 env: vec![],
@@ -64,6 +65,7 @@ mod tests {
                     url: "https://ftp.gnu.org/gnu/hello/hello-2.12.tar.gz".to_string(),
                     sha256: None,
                 }),
+                output: None,
             }),
             build: Some(ScriptBlock {
                 env: vec![],

@@ -392,7 +392,7 @@ pub fn build_package(
 
     if let Some(pb) = pb {
         pb.finish_and_clear();
-        println!("  ✓ Built {}.", module_id);
+        println!("  ✓ Built {}", module_id);
     }
 
     // Update lockfile
@@ -437,6 +437,8 @@ pub fn get_dist_path(sprout_path: &str, package: &ModuleBlock) -> PathBuf {
 
 fn fetch_git(sprout_path: &str, package: &ModuleBlock, git: &crate::ast::GitSpec) -> Result<()> {
     use std::process::Command;
+    use indicatif::{ProgressBar, ProgressStyle};
+    use std::time::Duration;
 
     let source_path = get_source_path(sprout_path, package);
 
@@ -455,7 +457,18 @@ fn fetch_git(sprout_path: &str, package: &ModuleBlock, git: &crate::ast::GitSpec
     let log_filename = format!("{}-fetch-{}.log", package.id(), timestamp);
     let log_path = logs_dir.join(&log_filename);
 
-    info!("Cloning git repository: {} -> {}", git.url, source_path.display());
+    let pb = if atty::is(atty::Stream::Stderr) {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner()
+            .template("  {spinner} {msg}")?);
+        pb.set_message(format!("Cloning {}", package.id()));
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Some(pb)
+    } else {
+        info!("Cloning git repository: {} -> {}", git.url, source_path.display());
+        None
+    };
+
     info!("Fetch log: {}", log_path.display());
 
     // Log git clone command
@@ -490,6 +503,13 @@ fn fetch_git(sprout_path: &str, package: &ModuleBlock, git: &crate::ast::GitSpec
         .stderr(fs::OpenOptions::new().append(true).open(&log_path)?)
         .status()?;
 
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
+        if status.success() {
+            println!("  ✓ Cloned {}", package.id());
+        }
+    }
+
     if !status.success() {
         return Err(anyhow!(
             "git clone failed with exit code: {:?}\nLog saved to: {}",
@@ -516,6 +536,8 @@ fn fetch_archive(sprout_path: &str, package: &ModuleBlock, archive: &crate::ast:
 
     if !cache_path.exists() {
         download_file(&archive.url, &cache_path, original_filename)?;
+    } else {
+        info!("Using cached {}", original_filename);
     }
 
     // Compute SHA256 if not present in manifest
@@ -560,8 +582,18 @@ fn fetch_archive(sprout_path: &str, package: &ModuleBlock, archive: &crate::ast:
         .map(|s| s.as_str())
         .unwrap_or(original_filename);
 
-    info!("Extracting {} -> {}", original_filename, source_path.display());
-    extract_archive_with_output(&cache_path, &source_path, original_filename, output_filename)?;
+    // If output is specified, skip extraction (just copy the file)
+    let skip_extract = package.fetch.as_ref()
+        .and_then(|f| f.output.as_ref())
+        .is_some();
+
+    if skip_extract {
+        info!("Copying {} -> {}", original_filename, source_path.display());
+        copy_file_with_progress(&cache_path, &source_path, original_filename, output_filename)?;
+    } else {
+        info!("Extracting {} -> {}", original_filename, source_path.display());
+        extract_archive_with_output(&cache_path, &source_path, original_filename, output_filename)?;
+    }
     Ok(())
 }
 
@@ -577,7 +609,7 @@ fn download_file(url: &str, dest: &Path, filename: &str) -> Result<()> {
         pb.set_style(ProgressStyle::default_bar()
             .template("  {msg} [{bar:40}] {bytes}/{total_bytes} ({eta})")?
             .progress_chars("=>-"));
-        pb.set_message(format!("Download {}", filename));
+        pb.set_message(format!("Downloading {}", filename));
         Some(pb)
     } else {
         info!("Downloading {}", filename);
@@ -599,7 +631,7 @@ fn download_file(url: &str, dest: &Path, filename: &str) -> Result<()> {
     }
 
     if let Some(pb) = pb {
-        pb.finish_with_message(format!("✓ Download {}", filename));
+        pb.finish_with_message(format!("✓ Downloaded {}", filename));
     } else {
         info!("Downloaded {}", filename);
     }
@@ -627,7 +659,7 @@ fn compute_file_sha256(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn extract_archive_with_output(cache_path: &Path, dest: &Path, filename: &str, output_name: &str) -> Result<()> {
+fn copy_file_with_progress(cache_path: &Path, dest_dir: &Path, filename: &str, output_name: &str) -> Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
     use std::time::Duration;
 
@@ -635,11 +667,46 @@ fn extract_archive_with_output(cache_path: &Path, dest: &Path, filename: &str, o
         let pb = ProgressBar::new_spinner();
         pb.set_style(ProgressStyle::default_spinner()
             .template("  {spinner} {msg}")?);
-        pb.set_message(format!("Extract {}", filename));
+        pb.set_message(format!("Copying {}", filename));
         pb.enable_steady_tick(Duration::from_millis(100));
         Some(pb)
     } else {
-        info!("Extracting {}", filename);
+        info!("Copying {}", filename);
+        None
+    };
+
+    let output_path = dest_dir.join(output_name);
+    std::fs::copy(cache_path, &output_path)?;
+
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
+        println!("  ✓ Copied {}", filename);
+    } else {
+        info!("Copied {}", filename);
+    }
+    Ok(())
+}
+
+fn extract_archive_with_output(cache_path: &Path, dest: &Path, filename: &str, output_name: &str) -> Result<()> {
+    use indicatif::{ProgressBar, ProgressStyle};
+    use std::time::Duration;
+
+    let is_archive = filename.ends_with(".tar.gz") || filename.ends_with(".tgz") 
+        || filename.ends_with(".tar.xz") || filename.ends_with(".zip")
+        || filename.ends_with(".gz") || filename.ends_with(".xz");
+
+    let action = if is_archive { "Extracting" } else { "Copying" };
+    let action_past = if is_archive { "Extracted" } else { "Copied" };
+
+    let pb = if atty::is(atty::Stream::Stderr) {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner()
+            .template("  {spinner} {msg}")?);
+        pb.set_message(format!("{} {}", action, filename));
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Some(pb)
+    } else {
+        info!("{} {}", action, filename);
         None
     };
 
@@ -677,9 +744,9 @@ fn extract_archive_with_output(cache_path: &Path, dest: &Path, filename: &str, o
 
     if let Some(pb) = pb {
         pb.finish_and_clear();
-        println!("  ✓ Extracted {}.", filename);
+        println!("  ✓ {} {}", action_past, filename);
     } else {
-        info!("Extracted {}", filename);
+        info!("{} {}", action_past, filename);
     }
     Ok(())
 }
@@ -699,6 +766,7 @@ mod tests {
                 ref_: Some("v1.0".to_string()),
                 recursive: false,
             }),
+            output: None,
         };
 
         let fetch2 = FetchBlock {
@@ -707,6 +775,7 @@ mod tests {
                 ref_: Some("v1.0".to_string()),
                 recursive: false,
             }),
+            output: None,
         };
 
         let module1 = ModuleBlock {

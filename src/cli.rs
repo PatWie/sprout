@@ -628,7 +628,7 @@ fn handle_env_command(sprout_path: &str, command: EnvCommand) -> Result<()> {
 
                             for (var, path) in &package.exports {
                                 let full_path = dist_path.join(path.trim_start_matches('/'));
-                                println!("export {}=\"{}:${{{}}}\"", var, full_path.display(), var);
+                                println!("export {}=\"{}${{{}:+:${{{}}}}}\"", var, full_path.display(), var, var);
                             }
                         }
                     }
