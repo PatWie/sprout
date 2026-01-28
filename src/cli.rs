@@ -120,6 +120,9 @@ pub enum Commands {
         /// Commit message (opens editor if not provided)
         #[arg(short, long)]
         message: Option<String>,
+        /// Generate commit message using AI
+        #[arg(long)]
+        ai: bool,
     },
 
     /// Push changes to remote git repository
@@ -353,7 +356,7 @@ pub enum EnvCommand {
     },
 }
 
-pub fn run_cli(cli: Cli) -> Result<()> {
+pub async fn run_cli(cli: Cli) -> Result<()> {
     let sprout_path = cli.sprout_path
         .map(|p| p.to_string_lossy().to_string())
         .or_else(|| std::env::var("SPROUT_PATH").ok())
@@ -401,8 +404,10 @@ pub fn run_cli(cli: Cli) -> Result<()> {
             println!("\n{}", "=== Git Status ===".bold());
             crate::core::git_status(&sprout_path)?;
         }
-        Commands::Commit { message } => {
-            if let Some(msg) = message {
+        Commands::Commit { message, ai } => {
+            if ai {
+                crate::core::git_commit_ai(&sprout_path).await?;
+            } else if let Some(msg) = message {
                 crate::core::git_commit(&sprout_path, &msg)?;
             } else {
                 crate::core::git_commit_interactive(&sprout_path)?;

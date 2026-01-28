@@ -16,7 +16,8 @@ use clap::Parser;
 
 use cli::{Cli, run_cli};
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Setup logging
@@ -41,5 +42,5 @@ fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting default subscriber failed");
 
-    run_cli(cli)
+    run_cli(cli).await
 }

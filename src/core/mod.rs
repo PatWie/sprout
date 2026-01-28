@@ -9,6 +9,79 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 use tracing::info;
+use aws_config::Region;
+use aws_sdk_bedrockruntime::{
+    Client,
+    config::BehaviorVersion,
+    types::{ContentBlock, ConversationRole, Message},
+};
+
+const AI_MODEL_ID: &str = "us.anthropic.claude-3-5-haiku-20241022-v1:0";
+const AI_AWS_PROFILE: &str = "my-aws-bedrock";
+const AI_AWS_REGION: &str = "us-east-1";
+
+/// Generate commit message using AWS Bedrock
+async fn generate_commit_message<P: AsRef<Path>>(sprout_path: P) -> Result<String> {
+    let sprout_path = sprout_path.as_ref();
+    
+    // Get git diff
+    let diff_output = std::process::Command::new("git")
+        .current_dir(sprout_path)
+        .args(["diff", "--cached"])
+        .output()
+        .context("Failed to get git diff")?;
+    
+    let diff = String::from_utf8_lossy(&diff_output.stdout);
+    
+    if diff.trim().is_empty() {
+        return Err(anyhow::anyhow!("No staged changes to commit"));
+    }
+    
+    // Set up AWS Bedrock client
+    let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new(AI_AWS_REGION.to_owned()))
+        .profile_name(AI_AWS_PROFILE.to_owned())
+        .load()
+        .await;
+    let client = Client::new(&sdk_config);
+    
+    // Create prompt
+    let prompt = format!(
+        "Generate a concise git commit message for the following changes. \
+        Return ONLY the commit message, no explanations or quotes.\n\n{}",
+        diff
+    );
+    
+    let user_message = Message::builder()
+        .role(ConversationRole::User)
+        .content(ContentBlock::Text(prompt))
+        .build()?;
+    
+    // Call Bedrock
+    let response = client
+        .converse()
+        .model_id(AI_MODEL_ID)
+        .messages(user_message)
+        .send()
+        .await?;
+    
+    // Extract message
+    let message = response
+        .output
+        .and_then(|o| o.as_message().ok().cloned())
+        .context("No response from model")?;
+    
+    let text = message
+        .content()
+        .iter()
+        .find_map(|c| match c {
+            ContentBlock::Text(t) => Some(t.clone()),
+            _ => None,
+        })
+        .context("No text in response")?;
+    
+    Ok(text.trim().to_string())
+}
 
 /// Create a git commit with the given message
 pub fn git_commit<P: AsRef<Path>>(sprout_path: P, message: &str) -> Result<()> {
@@ -35,6 +108,54 @@ pub fn git_commit<P: AsRef<Path>>(sprout_path: P, message: &str) -> Result<()> {
     let output = std::process::Command::new("git")
         .current_dir(sprout_path)
         .args(["commit", "-m", message])
+        .output()
+        .context("Failed to execute git commit")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("nothing to commit") {
+            info!("No changes to commit");
+            return Ok(());
+        }
+        return Err(anyhow::anyhow!("git commit failed: {}", stderr));
+    }
+
+    info!("Created git commit: {}", message);
+    Ok(())
+}
+
+/// Create a git commit with AI-generated message
+pub async fn git_commit_ai<P: AsRef<Path>>(sprout_path: P) -> Result<()> {
+    let sprout_path = sprout_path.as_ref();
+    
+    // Check if git repo exists
+    if !sprout_path.join(".git").exists() {
+        return Err(anyhow::anyhow!("Not a git repository"));
+    }
+    
+    // Stage all changes first
+    let output = std::process::Command::new("git")
+        .current_dir(sprout_path)
+        .args(["add", "."])
+        .output()
+        .context("Failed to execute git add")?;
+
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(
+            "git add failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    
+    // Generate commit message
+    info!("Generating commit message with AI...");
+    let message = generate_commit_message(sprout_path).await?;
+    info!("Generated message: {}", message);
+    
+    // Commit with generated message (without staging again)
+    let output = std::process::Command::new("git")
+        .current_dir(sprout_path)
+        .args(["commit", "-m", &message])
         .output()
         .context("Failed to execute git commit")?;
 
