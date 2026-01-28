@@ -170,8 +170,8 @@ pub enum ModulesCommand {
         /// Fetch all dependencies in manifest
         #[arg(long)]
         all: bool,
-        /// Specific package to fetch (e.g., 'ripgrep')
-        package: Option<String>,
+        /// Specific packages to fetch (e.g., 'ripgrep cmake')
+        packages: Vec<String>,
         /// Show what would be fetched without fetching
         #[arg(long)]
         dry_run: bool,
@@ -186,8 +186,8 @@ pub enum ModulesCommand {
         /// Build all dependencies in manifest
         #[arg(long)]
         all: bool,
-        /// Specific package to build (e.g., 'ripgrep')
-        package: Option<String>,
+        /// Specific packages to build (e.g., 'ripgrep cmake')
+        packages: Vec<String>,
         /// Force rebuild even if up-to-date
         #[arg(long)]
         rebuild: bool,
@@ -198,14 +198,14 @@ pub enum ModulesCommand {
 
     /// Install dependencies (fetch + build in one step)
     ///
-    /// Convenience command that fetches and builds a module
+    /// Convenience command that fetches and builds one or more modules
     #[command(visible_alias = "i")]
     Install {
         /// Install all dependencies in manifest
         #[arg(long)]
         all: bool,
-        /// Specific package to install (e.g., 'ripgrep')
-        package: Option<String>,
+        /// Specific packages to install (e.g., 'ripgrep cmake gcc')
+        packages: Vec<String>,
         /// Force rebuild even if up-to-date
         #[arg(long)]
         rebuild: bool,
@@ -432,7 +432,7 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
 fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: bool) -> Result<()> {
     match command {
 
-        ModulesCommand::Fetch { all, package, dry_run } => {
+        ModulesCommand::Fetch { all, packages, dry_run } => {
             let manifest = load_manifest(sprout_path)?;
 
             if all {
@@ -442,17 +442,19 @@ fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: b
                         info!("Skipping {}: {}", package.id(), e);
                     }
                 }
-            } else if let Some(module_id) = package {
-                let package = manifest.modules.iter()
-                    .find(|p| p.id() == module_id || p.name == module_id)
-                    .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
+            } else if !packages.is_empty() {
+                for module_id in packages {
+                    let package = manifest.modules.iter()
+                        .find(|p| p.id() == module_id || p.name == module_id)
+                        .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
 
-                fetch_package(sprout_path, package, dry_run)?;
+                    fetch_package(sprout_path, package, dry_run)?;
+                }
             } else {
-                return Err(anyhow::anyhow!("Specify --all or a package name"));
+                return Err(anyhow::anyhow!("Specify --all or one or more package names"));
             }
         }
-        ModulesCommand::Build { all, package, rebuild, dry_run } => {
+        ModulesCommand::Build { all, packages, rebuild, dry_run } => {
             let manifest = load_manifest(sprout_path)?;
 
             if all {
@@ -464,17 +466,19 @@ fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: b
                         warn!("Failed to build {}: {}", package.id(), e);
                     }
                 }
-            } else if let Some(module_id) = package {
-                let package = manifest.modules.iter()
-                    .find(|p| p.id() == module_id || p.name == module_id)
-                    .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
+            } else if !packages.is_empty() {
+                for module_id in packages {
+                    let package = manifest.modules.iter()
+                        .find(|p| p.id() == module_id || p.name == module_id)
+                        .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
 
-                build_package(sprout_path, package, dry_run, rebuild, verbose)?;
+                    build_package(sprout_path, package, dry_run, rebuild, verbose)?;
+                }
             } else {
-                return Err(anyhow::anyhow!("Specify --all or a package name"));
+                return Err(anyhow::anyhow!("Specify --all or one or more package names"));
             }
         }
-        ModulesCommand::Install { all, package, rebuild, dry_run } => {
+        ModulesCommand::Install { all, packages, rebuild, dry_run } => {
             let manifest = load_manifest(sprout_path)?;
 
             if all {
@@ -490,17 +494,19 @@ fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: b
                         warn!("Failed to build {}: {}", package.id(), e);
                     }
                 }
-            } else if let Some(module_id) = package {
-                let package = manifest.modules.iter()
-                    .find(|p| p.id() == module_id || p.name == module_id)
-                    .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
+            } else if !packages.is_empty() {
+                for module_id in packages {
+                    let package = manifest.modules.iter()
+                        .find(|p| p.id() == module_id || p.name == module_id)
+                        .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
 
-                if package.fetch.is_some() {
-                    fetch_package(sprout_path, package, dry_run)?;
+                    if package.fetch.is_some() {
+                        fetch_package(sprout_path, package, dry_run)?;
+                    }
+                    build_package(sprout_path, package, dry_run, rebuild, verbose)?;
                 }
-                build_package(sprout_path, package, dry_run, rebuild, verbose)?;
             } else {
-                return Err(anyhow::anyhow!("Specify --all or a package name"));
+                return Err(anyhow::anyhow!("Specify --all or one or more package names"));
             }
         }
         ModulesCommand::Status { expand, all } => {
