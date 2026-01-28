@@ -567,6 +567,39 @@ fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: b
                     }
                 } else {
                     // Install only specified packages without dependencies
+                    let lock = crate::lockfile::SproutLock::load(sprout_path)?;
+                    
+                    for module_id in &packages {
+                        let package = manifest.modules.iter()
+                            .find(|p| p.id() == *module_id || p.name == *module_id)
+                            .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
+
+                        // Check all dependencies are built
+                        for dep_id in &package.depends_on {
+                            let dist_path = Path::new(sprout_path).join("dist").join(dep_id);
+                            let dep_built = if dist_path.exists() {
+                                if let Some(state) = lock.get_module_state(dep_id) {
+                                    let dep_module = manifest.modules.iter()
+                                        .find(|m| m.id() == *dep_id)
+                                        .ok_or_else(|| anyhow::anyhow!("Dependency not found: {}", dep_id))?;
+                                    let current_hash = crate::core::deps::compute_build_hash(dep_module);
+                                    current_hash == state.build_hash && state.build_hash.is_some()
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            };
+                            
+                            if !dep_built {
+                                return Err(anyhow::anyhow!(
+                                    "Dependency {} is not built. Use --with-deps to install dependencies automatically.",
+                                    dep_id
+                                ));
+                            }
+                        }
+                    }
+
                     for module_id in packages {
                         let package = manifest.modules.iter()
                             .find(|p| p.id() == module_id || p.name == module_id)
