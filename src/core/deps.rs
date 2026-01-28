@@ -692,7 +692,7 @@ fn extract_archive_with_output(cache_path: &Path, dest: &Path, filename: &str, o
     use std::time::Duration;
 
     let is_archive = filename.ends_with(".tar.gz") || filename.ends_with(".tgz") 
-        || filename.ends_with(".tar.xz") || filename.ends_with(".zip")
+        || filename.ends_with(".tar.xz") || filename.ends_with(".tar.lz") || filename.ends_with(".zip")
         || filename.ends_with(".gz") || filename.ends_with(".xz");
 
     let action = if is_archive { "Extracting" } else { "Copying" };
@@ -719,6 +719,12 @@ fn extract_archive_with_output(cache_path: &Path, dest: &Path, filename: &str, o
         let tar_xz = std::fs::File::open(cache_path)?;
         let tar = xz::read::XzDecoder::new(tar_xz);
         let mut archive = tar::Archive::new(tar);
+        archive.unpack(dest)?;
+    } else if filename.ends_with(".tar.lz") {
+        let tar_lz = std::fs::File::open(cache_path)?;
+        let mut decompressed = Vec::new();
+        lzma_rs::lzma_decompress(&mut std::io::BufReader::new(tar_lz), &mut decompressed)?;
+        let mut archive = tar::Archive::new(std::io::Cursor::new(decompressed));
         archive.unpack(dest)?;
     } else if filename.ends_with(".zip") {
         let file = std::fs::File::open(cache_path)?;

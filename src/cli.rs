@@ -626,6 +626,23 @@ fn handle_env_command(sprout_path: &str, command: EnvCommand) -> Result<()> {
             } else if let Some(environments) = &manifest.environments {
                 if let Some(modules) = environments.environments.get(env_name) {
                     println!("# Environment: {}", env_name);
+                    
+                    // Guard to prevent loading environment multiple times in nested shells.
+                    // Without this, each time the shell config is sourced (e.g., exec zsh),
+                    // the exports would append to existing values, causing duplicates and
+                    // trailing colons that break tools like glibc's configure script.
+                    // This is especially problematic for variables that didn't exist before
+                    // (like custom vars), where repeated sourcing creates: "value:value:value"
+                    println!("# Guard to prevent loading multiple times");
+                    println!("if [ -n \"$SPROUT_ENV_LOADED\" ]; then");
+                    println!("  return 0 2>/dev/null || :");
+                    println!("fi");
+                    println!("export SPROUT_ENV_LOADED=1");
+                    println!();
+
+                    // Collect all exports by variable name
+                    use std::collections::HashMap;
+                    let mut exports: HashMap<String, Vec<String>> = HashMap::new();
 
                     for module_id in modules {
                         if let Some(package) = manifest.modules.iter().find(|p| p.id() == *module_id) {
@@ -633,9 +650,21 @@ fn handle_env_command(sprout_path: &str, command: EnvCommand) -> Result<()> {
 
                             for (var, path) in &package.exports {
                                 let full_path = dist_path.join(path.trim_start_matches('/'));
-                                println!("export {}=\"{}${{{}:+:${{{}}}}}\"", var, full_path.display(), var, var);
+                                exports.entry(var.clone())
+                                    .or_insert_with(Vec::new)
+                                    .push(full_path.display().to_string());
                             }
                         }
+                    }
+
+                    // Generate consolidated export statements
+                    let mut sorted_vars: Vec<_> = exports.keys().collect();
+                    sorted_vars.sort();
+
+                    for var in sorted_vars {
+                        let paths = &exports[var];
+                        let joined_paths = paths.join(":");
+                        println!("export {}=\"{}${{{}:+:${{{}}}}}\"", var, joined_paths, var, var);
                     }
                 } else {
                     return Err(anyhow::anyhow!("Environment '{}' not found", env_name));

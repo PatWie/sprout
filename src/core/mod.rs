@@ -16,7 +16,7 @@ use aws_sdk_bedrockruntime::{
     types::{ContentBlock, ConversationRole, Message},
 };
 
-const AI_MODEL_ID: &str = "us.anthropic.claude-3-5-haiku-20241022-v1:0";
+const AI_MODEL_ID: &str = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
 const AI_AWS_PROFILE: &str = "my-aws-bedrock";
 const AI_AWS_REGION: &str = "us-east-1";
 
