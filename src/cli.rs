@@ -206,6 +206,9 @@ pub enum ModulesCommand {
         all: bool,
         /// Specific packages to install (e.g., 'ripgrep cmake gcc')
         packages: Vec<String>,
+        /// Also install dependencies of specified packages
+        #[arg(long)]
+        with_deps: bool,
         /// Force rebuild even if up-to-date
         #[arg(long)]
         rebuild: bool,
@@ -478,7 +481,7 @@ fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: b
                 return Err(anyhow::anyhow!("Specify --all or one or more package names"));
             }
         }
-        ModulesCommand::Install { all, packages, rebuild, dry_run } => {
+        ModulesCommand::Install { all, packages, with_deps, rebuild, dry_run } => {
             let manifest = load_manifest(sprout_path)?;
 
             if all {
@@ -495,15 +498,45 @@ fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: b
                     }
                 }
             } else if !packages.is_empty() {
-                for module_id in packages {
-                    let package = manifest.modules.iter()
-                        .find(|p| p.id() == module_id || p.name == module_id)
-                        .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
-
-                    if package.fetch.is_some() {
-                        fetch_package(sprout_path, package, dry_run)?;
+                if with_deps {
+                    // Collect all packages and their dependencies
+                    let mut all_packages = std::collections::HashSet::new();
+                    for module_id in &packages {
+                        let deps = manifest.get_all_dependencies(module_id);
+                        for dep in deps {
+                            all_packages.insert(dep);
+                        }
                     }
-                    build_package(sprout_path, package, dry_run, rebuild, verbose)?;
+
+                    // Resolve dependency order for all collected packages
+                    let ordered_modules = resolve_dependency_order(&manifest)?;
+                    let packages_to_install: Vec<_> = ordered_modules.into_iter()
+                        .filter(|p| all_packages.contains(&p.id()))
+                        .collect();
+
+                    for package in packages_to_install {
+                        if package.fetch.is_some() {
+                            if let Err(e) = fetch_package(sprout_path, package, dry_run) {
+                                warn!("Failed to fetch {}: {}", package.id(), e);
+                                continue;
+                            }
+                        }
+                        if let Err(e) = build_package(sprout_path, package, dry_run, rebuild, verbose) {
+                            warn!("Failed to build {}: {}", package.id(), e);
+                        }
+                    }
+                } else {
+                    // Install only specified packages without dependencies
+                    for module_id in packages {
+                        let package = manifest.modules.iter()
+                            .find(|p| p.id() == module_id || p.name == module_id)
+                            .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module_id))?;
+
+                        if package.fetch.is_some() {
+                            fetch_package(sprout_path, package, dry_run)?;
+                        }
+                        build_package(sprout_path, package, dry_run, rebuild, verbose)?;
+                    }
                 }
             } else {
                 return Err(anyhow::anyhow!("Specify --all or one or more package names"));
