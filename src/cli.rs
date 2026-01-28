@@ -218,10 +218,10 @@ pub enum ModulesCommand {
     #[command(visible_alias = "s")]
     Status {
         /// Expand tree to show all dependencies recursively
-        #[arg(long)]
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
         expand: bool,
         /// Show all modules including up-to-date ones
-        #[arg(long)]
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
         all: bool,
     },
 
