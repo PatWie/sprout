@@ -284,6 +284,28 @@ pub fn git_commit_interactive<P: AsRef<Path>>(sprout_path: P) -> Result<()> {
     Ok(())
 }
 
+pub fn git_pull<P: AsRef<Path>>(sprout_path: P, remote: Option<String>, branch: Option<String>) -> Result<()> {
+    let sprout_path = sprout_path.as_ref();
+    if !sprout_path.join(".git").exists() {
+        return Err(anyhow::anyhow!("Not a git repository"));
+    }
+    let target_remote = remote.unwrap_or_else(|| "origin".to_string());
+    let target_branch = if let Some(b) = branch {
+        b
+    } else {
+        let output = std::process::Command::new("git")
+            .current_dir(sprout_path)
+            .args(["branch", "--show-current"])
+            .output()?;
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
+    std::process::Command::new("git")
+        .current_dir(sprout_path)
+        .args(["pull", &target_remote, &target_branch])
+        .status()?;
+    Ok(())
+}
+
 pub fn git_push<P: AsRef<Path>>(sprout_path: P, remote: Option<String>, branch: Option<String>) -> Result<()> {
     let sprout_path = sprout_path.as_ref();
     if !sprout_path.join(".git").exists() {

@@ -125,6 +125,16 @@ pub enum Commands {
         ai: bool,
     },
 
+    /// Pull changes from remote git repository
+    Pull {
+        /// Remote name (default: origin)
+        #[arg(short, long)]
+        remote: Option<String>,
+        /// Branch name (default: current branch)
+        #[arg(short, long)]
+        branch: Option<String>,
+    },
+
     /// Push changes to remote git repository
     Push {
         /// Remote name (default: origin)
@@ -415,6 +425,9 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
             } else {
                 crate::core::git_commit_interactive(&sprout_path)?;
             }
+        }
+        Commands::Pull { remote, branch } => {
+            crate::core::git_pull(&sprout_path, remote, branch)?;
         }
         Commands::Push { remote, branch } => {
             crate::core::git_push(&sprout_path, remote, branch)?;
