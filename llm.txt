@@ -1,0 +1,510 @@
+# Sprout - LLM Context Guide
+
+> Symlink and source dependency manager that just works
+
+## Overview
+
+Sprout manages dotfiles (via symlinks) and builds software dependencies from source (Git repos or HTTP archives). Everything is versioned, tracked in Git, and declared in a single manifest file.
+
+## Directory Structure
+
+```
+/sprout/                    # Default root (configurable)
+├── manifest.sprout         # Main configuration file (REQUIRED)
+├── sprout.lock            # Auto-generated lockfile (hashes, state)
+├── symlinks/              # Tracked dotfiles/configs
+├── dist/                  # Build outputs (install destinations)
+│   └── <module-name>/     # Per-module install prefix
+├── sources/               # Extracted/cloned sources
+│   ├── git/               # Git repositories
+│   └── http/              # Extracted HTTP archives
+├── cache/
+│   └── http/              # Downloaded archives (.tar.gz, .zip, etc.)
+├── logs/                  # Build logs (timestamped)
+└── .git/                  # Git repository (auto-initialized)
+```
+
+## manifest.sprout Syntax
+
+### Module Block Structure
+
+```sprout
+module <name> {
+    depends_on = [<module1>, <module2>, ...]
+    exports = {
+        <VAR_NAME> = "<relative-path>"
+        <VAR_NAME> = "<relative-path>"
+    }
+    fetch {
+        <fetch-spec>
+    }
+    build {
+        env {
+            <VAR> = "<value>"
+        }
+        <shell-command-1>
+        <shell-command-2>
+        ...
+    }
+}
+```
+
+### Required Fields
+
+- **name**: Module identifier (alphanumeric, hyphens, underscores)
+- **depends_on**: Array of module names (can be empty `[]`)
+- **exports**: Map of environment variables to relative paths (can be empty `{}`)
+
+### Optional Fields
+
+- **fetch**: Source specification (omit for build-only modules)
+- **build**: Build script with optional env block (omit for fetch-only modules)
+
+### Fetch Specifications
+
+#### Git Repository
+```sprout
+fetch {
+    git = {
+        url = https://github.com/user/repo.git
+        ref = v1.0.0                    # Optional: tag, branch, or commit
+        recursive = true                # Optional: clone submodules (default: false)
+    }
+}
+```
+
+#### HTTP Archive
+```sprout
+fetch {
+    http = {
+        url = https://example.com/archive.tar.gz
+        sha256 = <hash>                 # Optional but recommended (auto-computed)
+    }
+}
+```
+
+Supported formats: `.tar.gz`, `.tar.xz`, `.tar.bz2`, `.tgz`, `.zip`
+
+#### Local Path
+```sprout
+fetch {
+    local = {
+        path = /path/to/source
+    }
+}
+```
+
+### Build Block
+
+```sprout
+build {
+    env {
+        CC = "${SPROUT_DIST}/gcc/bin/gcc"
+        PATH = "${SPROUT_DIST}/go/bin:${PATH}"
+    }
+    cd source-dir
+    ./configure --prefix=${DIST_PATH}
+    make -j8
+    make install
+}
+```
+
+**Available Variables:**
+- `${SPROUT_DIST}`: Absolute path to `/sprout/dist`
+- `${DIST_PATH}`: Absolute path to `/sprout/dist/<module-name>`
+- `${SOURCE_PATH}`: Absolute path to `/sprout/sources/{git|http}/<module-name>`
+- `${PATH}`, `${LD_LIBRARY_PATH}`, etc.: Inherited from environment
+
+**Behavior:**
+- Commands execute in `${SOURCE_PATH}` (or sprout root if no fetch)
+- Script runs with `set -e` (fails on first error)
+- Environment variables are exported in order (bash expansion applies)
+- Output logged to `/sprout/logs/<module>-<timestamp>.log`
+
+**CRITICAL: Using Dependencies in Build Scripts**
+
+When a module depends on other modules (gcc, cmake, clang, etc.), you MUST explicitly reference them in the build env block. Dependencies are NOT automatically added to PATH.
+
+```sprout
+module neovim {
+    depends_on = [gcc, cmake]    # Declares dependencies
+    build {
+        env {
+            # REQUIRED: Explicitly use dependency binaries
+            CC = "${SPROUT_DIST}/gcc/bin/gcc"
+            CXX = "${SPROUT_DIST}/gcc/bin/g++"
+            PATH = "${SPROUT_DIST}/cmake/bin:${PATH}"
+            LD_LIBRARY_PATH = "${SPROUT_DIST}/gcc/lib64:${SPROUT_DIST}/gcc/lib"
+        }
+        make -j8 CMAKE_BUILD_TYPE=Release
+        make install
+    }
+}
+```
+
+**Why this matters:**
+- `depends_on` only ensures build order (dependencies built first)
+- Build environment is isolated - system tools are NOT used by default
+- You must explicitly point to `${SPROUT_DIST}/<dep>/bin` in env block
+- This ensures reproducible builds using your managed toolchain
+
+### Exports Block
+
+Defines environment variables for the module. Paths are relative to `${DIST_PATH}`:
+
+```sprout
+exports = {
+    PATH = "/bin"                       # Adds ${DIST_PATH}/bin to PATH
+    LD_LIBRARY_PATH = "/lib64"          # Adds ${DIST_PATH}/lib64
+    LD_LIBRARY_PATH = "/lib"            # Multiple values allowed (appended)
+    CARGO_HOME = "/cargo"               # Custom variables
+}
+```
+
+**Rules:**
+- Paths must start with `/` (relative to module's dist directory)
+- Multiple entries with same key are allowed (all values exported)
+- Variables are exported when environment is activated
+
+### Environments Block
+
+Groups modules into named sets:
+
+```sprout
+environments {
+    default = [cmake, gcc, rust, neovim]
+    dev = [rust, rust-tools, go, go-tools]
+    minimal = [cmake]
+}
+```
+
+**Usage:**
+```bash
+eval "$(sprout env generate)"           # Activates "default"
+eval "$(sprout env generate dev)"       # Activates "dev"
+```
+
+### Comments
+
+```sprout
+# Comments start with # and continue to end of line
+# WARNING: Comments may be removed when manifest is reformatted
+# Keep important docs in README or inline in build scripts
+```
+
+## Common Patterns
+
+### Binary Distribution (No Build)
+```sprout
+module cmake {
+    depends_on = []
+    exports = {
+        PATH = "/bin"
+    }
+    fetch {
+        http = {
+            url = https://github.com/Kitware/CMake/releases/download/v4.0.3/cmake-4.0.3-linux-x86_64.tar.gz
+            sha256 = 585ae9e013107bc8e7c7c9ce872cbdcbdff569e675b07ef57aacfb88c886faac
+        }
+    }
+    build {
+        ln -sf ${SOURCE_PATH}/cmake-4.0.3-linux-x86_64/bin ${DIST_PATH}
+    }
+}
+```
+
+### Source Build with Dependencies
+```sprout
+module neovim {
+    depends_on = [gcc, cmake]
+    exports = {
+        PATH = "/bin"
+    }
+    fetch {
+        git = {
+            url = https://github.com/neovim/neovim.git
+            ref = v0.11.4
+        }
+    }
+    build {
+        env {
+            CC = "${SPROUT_DIST}/gcc/bin/gcc"
+            PATH = "${SPROUT_DIST}/cmake/bin:${PATH}"
+        }
+        make -j8 CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX=${DIST_PATH}"
+        make install
+    }
+}
+```
+
+### Build-Only Module (No Fetch)
+```sprout
+module rust-tools {
+    depends_on = [rust]
+    exports = {
+        PATH = "/bin"
+    }
+    build {
+        env {
+            PATH = "${SPROUT_DIST}/rust/bin:${PATH}"
+        }
+        cargo install --root ${DIST_PATH} ripgrep
+        cargo install --root ${DIST_PATH} fd-find
+    }
+}
+```
+
+### Complex Compiler Build
+```sprout
+module gcc {
+    depends_on = []
+    exports = {
+        PATH = "/bin"
+        LD_LIBRARY_PATH = "/lib64"
+        LD_LIBRARY_PATH = "/lib"
+    }
+    fetch {
+        http = {
+            url = https://mirrors.ibiblio.org/gnu/gcc/gcc-15.1.0/gcc-15.1.0.tar.xz
+            sha256 = e2b09ec21660f01fecffb715e0120265216943f038d0e48a9868713e54f06cea
+        }
+    }
+    build {
+        cd gcc-15.1.0
+        ./contrib/download_prerequisites
+        mkdir -p build
+        cd build
+        ../configure --disable-multilib --enable-languages=c,c++ --prefix=${DIST_PATH}
+        make -j8
+        make install
+    }
+}
+```
+
+## CLI Commands
+
+### Initialization
+```bash
+sprout init [path]              # Initialize sprout directory (default: /sprout)
+sprout init --empty [path]      # Initialize with empty manifest
+```
+
+### Module Management
+```bash
+sprout modules fetch <module>   # Download source
+sprout modules build <module>   # Build and install
+sprout modules install <module> # Fetch + build
+sprout modules status           # Show module status
+sprout modules hash -i          # Compute and update hashes
+sprout modules clean            # Remove unused sources/cache
+
+# Flags
+--all                           # Apply to all modules
+--rebuild                       # Force rebuild
+--dry-run                       # Show what would happen
+--expand                        # Show dependency tree
+```
+
+### Environment Management
+```bash
+sprout env list                 # List all environments
+sprout env edit [name]          # Interactively edit environment
+sprout env generate [name]      # Generate export statements
+
+# Activate environment
+eval "$(sprout env generate)"
+eval "$(sprout env generate dev)"
+```
+
+### Symlink Management
+```bash
+sprout symlinks add <path>      # Track file/directory
+sprout symlinks add -r <dir>    # Track directory recursively
+sprout symlinks status          # Show symlink status
+sprout symlinks restore         # Restore broken symlinks
+sprout symlinks rehash          # Update hashes
+sprout symlinks undo <path>     # Stop tracking
+
+# Flags
+--all                           # Show all (including up-to-date)
+--dry-run                       # Preview changes
+```
+
+### Git Operations
+```bash
+sprout status                   # Show complete status
+sprout commit [-m "msg"]        # Commit changes
+sprout push                     # Push to remote
+```
+
+### Manifest Editing
+```bash
+sprout edit                     # Edit manifest with $EDITOR
+sprout format                   # Validate and print formatted manifest
+sprout format -i                # Format in-place (adds SHA256 hashes)
+```
+
+## Workflow Examples
+
+### Adding a New Module
+
+1. Edit manifest:
+```bash
+sprout edit
+```
+
+2. Add module definition:
+```sprout
+module ripgrep {
+    depends_on = [rust]
+    exports = {
+        PATH = "/bin"
+    }
+    build {
+        env {
+            PATH = "${SPROUT_DIST}/rust/bin:${PATH}"
+        }
+        cargo install --root ${DIST_PATH} ripgrep
+    }
+}
+```
+
+3. Install and format:
+```bash
+sprout modules install ripgrep
+sprout format -i                # Adds SHA256 if needed
+```
+
+4. Add to environment:
+```bash
+sprout env edit default         # Toggle ripgrep on
+```
+
+5. Commit:
+```bash
+sprout commit -m "Add ripgrep"
+```
+
+### Setting Up on New Machine
+
+```bash
+# Clone your sprout repo
+git clone <your-repo> /sprout
+cd /sprout
+
+# Restore symlinks
+sprout symlinks restore
+
+# Build dependencies
+sprout modules install --all
+
+# Activate environment
+eval "$(sprout env generate)"
+```
+
+### Tracking Dotfiles
+
+```bash
+# Track single file
+sprout symlinks add ~/.bashrc
+
+# Track directory
+sprout symlinks add -r ~/.config/nvim
+
+# Check status
+sprout symlinks status
+
+# Commit
+sprout commit -m "Track bashrc and nvim config"
+```
+
+## Important Notes
+
+### Manifest Formatting
+- `sprout format -i` reformats manifest alphabetically
+- Comments may be removed during reformatting
+- SHA256 hashes are auto-computed for HTTP archives
+- Keep documentation in README or build scripts
+
+### Build Behavior
+- Dependencies are built in topological order
+- Builds are skipped if dist directory exists (unless `--rebuild`)
+- Build hash changes trigger rebuild
+- Logs saved to `/sprout/logs/<module>-<timestamp>.log`
+
+### Symlink Tracking
+- Files moved to `/sprout/symlinks/<relative-path>`
+- Original location gets symlink
+- Hashes stored in `sprout.lock`
+- Use `sprout symlinks restore` after clone
+
+### Environment Variables
+- Exports are relative to `${DIST_PATH}`
+- Multiple values for same variable are concatenated
+- Variables expanded in build env blocks
+- Use `eval "$(sprout env generate)"` to activate
+
+### Git Integration
+- Auto-initialized on `sprout init`
+- `.gitignore` excludes `dist/`, `cache/`, `sources/`, `logs/`
+- Tracks `manifest.sprout`, `sprout.lock`, `symlinks/`
+- Use `sprout commit` and `sprout push` for changes
+
+## Troubleshooting
+
+### Module won't build
+```bash
+# Check dependencies
+sprout modules status --expand
+
+# View build log
+cat /sprout/logs/<module>-*.log | tail -100
+
+# Force rebuild
+sprout modules build <module> --rebuild
+```
+
+### Symlink broken
+```bash
+# Check status
+sprout symlinks status --all
+
+# Restore
+sprout symlinks restore
+```
+
+### Missing SHA256
+```bash
+# Auto-compute and add
+sprout format -i
+```
+
+### Clean old versions
+```bash
+# Preview
+sprout modules clean --dry-run
+
+# Remove
+sprout modules clean
+```
+
+## File Locations
+
+- **Manifest**: `/sprout/manifest.sprout`
+- **Lockfile**: `/sprout/sprout.lock`
+- **Build logs**: `/sprout/logs/<module>-<timestamp>.log`
+- **Module sources**: `/sprout/sources/{git|http}/<module>/`
+- **Module installs**: `/sprout/dist/<module>/`
+- **Cached archives**: `/sprout/cache/http/<filename>`
+- **Tracked files**: `/sprout/symlinks/<relative-path>`
+
+## Environment Variables
+
+- `SPROUT_PATH`: Override default `/sprout` location
+- `HOME`: Used for symlink tracking (can override with `--tracking-path`)
+- `EDITOR`: Used by `sprout edit` and `sprout commit`
+
+## Exit Codes
+
+- `0`: Success
+- `1`: Error (check stderr for details)
