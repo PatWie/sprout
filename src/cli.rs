@@ -60,16 +60,24 @@ pub struct Cli {
 pub enum Commands {
     /// Initialize a new sprout directory with required structure
     ///
-    /// Creates symlinks/, sources/, cache/, dist/ directories and initializes
-    /// a git repository with .gitignore and manifest.sprout with example modules
+    /// Initialize or clone a sprout directory
+    ///
+    /// Three modes:
+    /// - Default: creates directory with example manifest
+    /// - --empty: creates directory with empty manifest
+    /// - --from <url>: clones existing sprout repository from git
     #[command(visible_alias = "i")]
     Init {
-        /// Directory to initialize (defaults to /sprout)
+        /// Directory to initialize or clone into (defaults to /sprout)
         #[arg(default_value = "/sprout")]
         path: PathBuf,
 
-        /// Create empty manifest instead of using template with examples
+        /// Clone from git repository URL
         #[arg(long)]
+        from: Option<String>,
+
+        /// Create empty manifest instead of template
+        #[arg(long, conflicts_with = "from")]
         empty: bool,
     },
 
@@ -378,14 +386,18 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
     let verbose = cli.verbose > 0;
 
     match cli.command {
-        Commands::Init { path, empty } => {
-            // Use global sprout-path if provided, otherwise use the init-specific path
+        Commands::Init { path, from, empty } => {
             let init_path = if sprout_path != "/sprout" {
                 &sprout_path
             } else {
                 path.to_str().unwrap()
             };
-            init_sprout(init_path, empty)?;
+            
+            if let Some(git_url) = from {
+                init_sprout_from_git(init_path, &git_url)?;
+            } else {
+                init_sprout(init_path, empty)?;
+            }
         }
         Commands::Modules { command } => {
             handle_modules_command(&sprout_path, command, verbose)?;

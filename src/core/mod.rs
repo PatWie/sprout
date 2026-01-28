@@ -173,6 +173,34 @@ pub async fn git_commit_ai<P: AsRef<Path>>(sprout_path: P) -> Result<()> {
 }
 
 /// Initialize a new sprout directory
+pub fn init_sprout_from_git<P: AsRef<Path>>(path: P, git_url: &str) -> Result<()> {
+    let sprout_path = path.as_ref();
+    
+    if sprout_path.exists() {
+        return Err(anyhow::anyhow!("Directory already exists: {}", sprout_path.display()));
+    }
+
+    info!("Cloning sprout repository from: {}", git_url);
+    
+    let status = std::process::Command::new("git")
+        .args(["clone", git_url, &sprout_path.to_string_lossy()])
+        .status()
+        .context("Failed to clone git repository")?;
+    
+    if !status.success() {
+        return Err(anyhow::anyhow!("Git clone failed"));
+    }
+
+    // Create missing directories if they don't exist
+    fs::create_dir_all(sprout_path.join("sources/git"))?;
+    fs::create_dir_all(sprout_path.join("sources/http"))?;
+    fs::create_dir_all(sprout_path.join("cache/archives"))?;
+    fs::create_dir_all(sprout_path.join("dist"))?;
+
+    info!("Successfully cloned sprout repository to: {}", sprout_path.display());
+    Ok(())
+}
+
 pub fn init_sprout<P: AsRef<Path>>(path: P, empty: bool) -> Result<()> {
     let sprout_path = path.as_ref();
 
