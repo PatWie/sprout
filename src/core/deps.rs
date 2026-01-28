@@ -249,12 +249,12 @@ pub fn build_package(
         fs::remove_dir_all(&dist_path)?;
     }
 
-    // Create dist directory
-    fs::create_dir_all(&dist_path)?;
-
     // Execute build commands if any
     if let Some(build) = &package.build {
         debug!("Build env block: {:?}", build.env);
+
+        // Create dist directory before build
+        fs::create_dir_all(&dist_path)?;
 
         // Build single shell script with all commands
         let mut script = String::from("set -e\n");

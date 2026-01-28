@@ -976,7 +976,19 @@ fn print_tree_node(
     };
 
     let fetched = module.fetch.is_none() || has_source;
-    let built = has_dist;
+    
+    // Check if build completed successfully by verifying lock file has matching hash
+    let built = if has_dist {
+        if let Some(state) = lock.get_module_state(id) {
+            let current_build_hash = compute_build_hash(module);
+            current_build_hash == state.build_hash && state.build_hash.is_some()
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+    
     let mut up_to_date = false;
 
     if has_dist && let Some(state) = lock.get_module_state(id) {
