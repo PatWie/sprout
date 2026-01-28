@@ -539,7 +539,22 @@ fn handle_modules_command(sprout_path: &str, command: ModulesCommand, verbose: b
                         .filter(|p| all_packages.contains(&p.id()))
                         .collect();
 
+                    let lock = crate::lockfile::SproutLock::load(sprout_path)?;
                     for package in packages_to_install {
+                        // Skip if already built and not rebuilding
+                        if !rebuild {
+                            let dist_path = Path::new(sprout_path).join("dist").join(package.id());
+                            if dist_path.exists() {
+                                if let Some(state) = lock.get_module_state(&package.id()) {
+                                    let current_hash = crate::core::deps::compute_build_hash(package);
+                                    if current_hash == state.build_hash {
+                                        info!("Package {} is already up-to-date, skipping", package.id());
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+
                         if package.fetch.is_some() {
                             if let Err(e) = fetch_package(sprout_path, package, dry_run) {
                                 warn!("Failed to fetch {}: {}", package.id(), e);
