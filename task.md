@@ -40,7 +40,7 @@ It has two kinds of top-level blocks:
 
 Each module specifies:
 - `depends_on` – list of other modules (by name only, no version).
-- `exports` – environment variables to expose when active.
+- `provides` – environment variables to expose when active (each with a `set`/`prepend`/`append` verb).
 - `fetch` – how to retrieve the source (git, http, or local).
 - `build` – shell script to build/install.
 - Each script block may define `env { ... }` for phase-specific variables.
@@ -49,8 +49,8 @@ Example:
 ```
 module clang {
     depends_on = [gcc]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
 
     fetch {
@@ -109,7 +109,7 @@ Statement ::= ModuleBlock | EnvironmentsBlock ;
 ModuleBlock ::= "module" Identifier "{" { ModuleField } "}" ;
 
 ModuleField ::= "depends_on" "=" Array
-              | "exports" "=" Map
+              | "provides" "=" ProvidesMap
               | FetchBlock
               | BuildBlock ;
 
@@ -133,8 +133,9 @@ CommandLine ::= (any line of shell script) ;
 EnvironmentsBlock ::= "environments" "{" { EnvironmentEntry } "}" ;
 EnvironmentEntry  ::= Identifier "=" Array ;
 
-Array ::= "[" [Value {"," Value}] "]" ;
-Map   ::= "{" { Identifier "=" String } "}" ;
+Array       ::= "[" [Value {"," Value}] "]" ;
+ProvidesMap ::= "{" { ExportMode Identifier "=" String } "}" ;
+ExportMode  ::= "set" | "prepend" | "append" ;
 
 Value      ::= String | UnquotedValue ;
 String     ::= "\"" { Character } "\"" ;

@@ -31,12 +31,57 @@ impl SproutManifest {
     }
 }
 
+/// How a provided environment variable combines with any pre-existing value.
+///
+/// The mode is mandatory in the DSL so that scalar variables and search-path
+/// variables are never confused: a scalar such as `CARGO_HOME` must be `Set`
+/// (a single directory), while a search path such as `PATH` must `Prepend` or
+/// `Append` so system entries survive activation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExportMode {
+    /// Overwrite any existing value with a single scalar value (idempotent).
+    Set,
+    /// Prepend to an existing colon-separated search path (this entry wins).
+    Prepend,
+    /// Append to an existing colon-separated search path (this entry is last).
+    Append,
+}
+
+impl ExportMode {
+    /// The lowercase DSL keyword for this mode.
+    pub fn keyword(self) -> &'static str {
+        match self {
+            ExportMode::Set => "set",
+            ExportMode::Prepend => "prepend",
+            ExportMode::Append => "append",
+        }
+    }
+
+    /// Parse a DSL keyword into a mode, returning `None` for anything else.
+    pub fn from_keyword(keyword: &str) -> Option<Self> {
+        match keyword {
+            "set" => Some(ExportMode::Set),
+            "prepend" => Some(ExportMode::Prepend),
+            "append" => Some(ExportMode::Append),
+            _ => None,
+        }
+    }
+}
+
+/// A single environment-variable contribution declared in a `provides` block.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Export {
+    pub mode: ExportMode,
+    pub name: String,
+    pub value: String,
+}
+
 /// Package block: package name { ... }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleBlock {
     pub name: String,
     pub depends_on: Vec<String>,
-    pub exports: Vec<(String, String)>,
+    pub provides: Vec<Export>,
     pub fetch: Option<FetchBlock>,
     pub build: Option<ScriptBlock>,
     pub update: Option<ScriptBlock>,
@@ -101,7 +146,7 @@ pub enum Token {
     Package,
     Environments,
     DependsOn,
-    Exports,
+    Provides,
     Fetch,
     Build,
     Install,
@@ -176,10 +221,10 @@ impl PrettyPrint for ModuleBlock {
         }
         output.push_str("]\n");
         
-        if !self.exports.is_empty() {
-            output.push_str("    exports = {\n");
-            for (key, value) in &self.exports {
-                output.push_str(&format!("        {} = \"{}\"\n", key, value));
+        if !self.provides.is_empty() {
+            output.push_str("    provides = {\n");
+            for export in &self.provides {
+                output.push_str(&format!("        {} {} = \"{}\"\n", export.mode.keyword(), export.name, export.value));
             }
             output.push_str("    }\n");
         }

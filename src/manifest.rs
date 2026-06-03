@@ -99,13 +99,10 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_manifest() -> SproutManifest {
-        let mut exports = HashMap::new();
-        exports.insert("PATH".to_string(), vec!["/bin".to_string()]);
-
         let dep_module = ModuleBlock {
             name: "dep1".to_string(),
             depends_on: vec![],
-            exports: vec![],
+            provides: vec![],
             fetch: None,
             build: None,
             update: None,
@@ -114,7 +111,7 @@ mod tests {
         let module = ModuleBlock {
             name: "test".to_string(),
             depends_on: vec!["dep1".to_string()],
-            exports: exports.into_iter().flat_map(|(k, vs)| vs.into_iter().map(move |v| (k.clone(), v))).collect(),
+            provides: vec![Export { mode: ExportMode::Prepend, name: "PATH".to_string(), value: "/bin".to_string() }],
             fetch: Some(FetchBlock {
                 spec: FetchSpec::Git(GitSpec {
                     url: "https://example.com/repo.git".to_string(),

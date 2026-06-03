@@ -348,8 +348,8 @@ pub enum EnvCommand {
     /// Interactively edit environment (toggle modules)
     ///
     /// Opens interactive menu to select which built modules should be
-    /// included in the environment. Modules define exports for PATH,
-    /// LD_LIBRARY_PATH, etc.
+    /// included in the environment. Modules declare what they `provides`
+    /// for PATH, LD_LIBRARY_PATH, etc.
     Edit {
         /// Environment name (default: "default")
         #[arg(default_value = "default")]
@@ -741,10 +741,9 @@ fn handle_env_command(sprout_path: &str, command: EnvCommand) -> Result<()> {
                     
                     // Guard to prevent loading environment multiple times in nested shells.
                     // Without this, each time the shell config is sourced (e.g., exec zsh),
-                    // the exports would append to existing values, causing duplicates and
-                    // trailing colons that break tools like glibc's configure script.
-                    // This is especially problematic for variables that didn't exist before
-                    // (like custom vars), where repeated sourcing creates: "value:value:value"
+                    // every `prepend`/`append` entry would re-accumulate onto the existing
+                    // value, growing PATH-like variables with duplicate segments. (Scalar
+                    // `set` entries are idempotent and unaffected.)
                     println!("# Guard to prevent loading multiple times");
                     println!("if [ -n \"$SPROUT_ENV_LOADED\" ]; then");
                     println!("  return 0 2>/dev/null || :");
@@ -752,31 +751,64 @@ fn handle_env_command(sprout_path: &str, command: EnvCommand) -> Result<()> {
                     println!("export SPROUT_ENV_LOADED=1");
                     println!();
 
-                    // Collect all exports by variable name
+                    // Collect contributions per variable, carrying the mode each
+                    // module declared for it. A variable may be contributed by several
+                    // modules (e.g. every module adds to PATH); their modes are expected
+                    // to agree, and a conflict is surfaced rather than silently resolved.
                     use std::collections::HashMap;
-                    let mut exports: HashMap<String, Vec<String>> = HashMap::new();
+                    use crate::ast::ExportMode;
+                    let mut contributions: HashMap<String, (ExportMode, Vec<String>)> = HashMap::new();
 
                     for module_id in modules {
                         if let Some(package) = manifest.modules.iter().find(|p| p.id() == *module_id) {
                             let dist_path = std::path::Path::new(sprout_path).join("dist").join(package.id());
 
-                            for (var, path) in &package.exports {
-                                let full_path = dist_path.join(path.trim_start_matches('/'));
-                                exports.entry(var.clone())
-                                    .or_insert_with(Vec::new)
-                                    .push(full_path.display().to_string());
+                            for export in &package.provides {
+                                let full_path = dist_path.join(export.value.trim_start_matches('/'));
+                                let entry = contributions
+                                    .entry(export.name.clone())
+                                    .or_insert_with(|| (export.mode, Vec::new()));
+                                if entry.0 != export.mode {
+                                    warn!(
+                                        "Conflicting modes for env var '{}'; keeping '{}', ignoring '{}'",
+                                        export.name, entry.0.keyword(), export.mode.keyword()
+                                    );
+                                }
+                                entry.1.push(full_path.display().to_string());
                             }
                         }
                     }
 
-                    // Generate consolidated export statements
-                    let mut sorted_vars: Vec<_> = exports.keys().collect();
+                    // Generate one export statement per variable, shaped by its mode.
+                    let mut sorted_vars: Vec<_> = contributions.keys().cloned().collect();
                     sorted_vars.sort();
 
-                    for var in sorted_vars {
-                        let paths = &exports[var];
-                        let joined_paths = paths.join(":");
-                        println!("export {}=\"{}${{{}:+:${{{}}}}}\"", var, joined_paths, var, var);
+                    for var in &sorted_vars {
+                        let (mode, values) = &contributions[var];
+                        debug_assert!(!values.is_empty(), "every collected var has at least one value");
+
+                        match mode {
+                            // Scalar: assign directly. Re-sourcing is idempotent and can
+                            // never accumulate into "value:value". Multiple definitions are
+                            // a conflict; the last deterministically wins.
+                            ExportMode::Set => {
+                                if values.len() > 1 {
+                                    warn!("Multiple 'set' definitions for env var '{}'; using the last", var);
+                                }
+                                let value = values.last().expect("non-empty checked above");
+                                println!("export {}=\"{}\"", var, value);
+                            }
+                            // Search path, this activation's entries take precedence.
+                            ExportMode::Prepend => {
+                                let joined = values.join(":");
+                                println!("export {}=\"{}${{{}:+:${{{}}}}}\"", var, joined, var, var);
+                            }
+                            // Search path, existing entries take precedence.
+                            ExportMode::Append => {
+                                let joined = values.join(":");
+                                println!("export {}=\"${{{}:+${{{}}}:}}{}\"", var, var, var, joined);
+                            }
+                        }
                     }
                 } else {
                     return Err(anyhow::anyhow!("Environment '{}' not found", env_name));

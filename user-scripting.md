@@ -81,7 +81,7 @@ sprout-edit set ripgrep name rg
 sprout-edit get <module> <field>
 # Examples:
 sprout-edit get go-tools depends_on  # Returns list
-sprout-edit get gcc exports          # Returns exports map
+sprout-edit get gcc provides         # Returns provides map
 ```
 
 #### Check if Module Exists
@@ -176,8 +176,8 @@ sprout go add github.com/junegunn/fzf --standalone
 ```
 module go-tools {
     depends_on = [go]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -363,7 +363,7 @@ fi
 sprout-edit get "$MODULE" depends_on
 ```
 
-### Conditional Exports
+### Conditional Provides
 
 **~/.config/sprout/commands/sprout-add-lib-path**
 ```bash
@@ -373,8 +373,8 @@ sprout-edit get "$MODULE" depends_on
 MODULE=$1
 PATH=$2
 
-# Get current exports
-CURRENT=$(sprout-edit get "$MODULE" exports | grep LD_LIBRARY_PATH || true)
+# Get current provides
+CURRENT=$(sprout-edit get "$MODULE" provides | grep LD_LIBRARY_PATH || true)
 
 if echo "$CURRENT" | grep -q "$PATH"; then
     echo "Path already exists: $PATH"
@@ -503,7 +503,7 @@ module gopls {
     build {
         go build -o ${DIST_PATH}/bin/gopls ./gopls
     }
-    exports = { PATH = "/bin" }
+    provides = { prepend PATH = "/bin" }
 }
 ```
 

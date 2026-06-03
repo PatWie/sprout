@@ -7,13 +7,10 @@ mod tests {
     use std::collections::HashMap;
 
     fn create_test_git_package() -> ModuleBlock {
-        let mut exports = HashMap::new();
-        exports.insert("PATH".to_string(), vec!["/bin".to_string()]);
-
         ModuleBlock {
             name: "fd".to_string(),
             depends_on: vec![],
-            exports: exports.into_iter().flat_map(|(k, vs)| vs.into_iter().map(move |v| (k.clone(), v))).collect(),
+            provides: vec![Export { mode: ExportMode::Prepend, name: "PATH".to_string(), value: "/bin".to_string() }],
             fetch: Some(FetchBlock {
                 spec: FetchSpec::Git(GitSpec {
                     url: "https://github.com/sharkdp/fd.git".to_string(),
@@ -34,13 +31,10 @@ mod tests {
     }
 
     fn create_test_cargo_package() -> ModuleBlock {
-        let mut exports = HashMap::new();
-        exports.insert("PATH".to_string(), vec!["/bin".to_string()]);
-
         ModuleBlock {
             name: "bat".to_string(),
             depends_on: vec![],
-            exports: exports.into_iter().flat_map(|(k, vs)| vs.into_iter().map(move |v| (k.clone(), v))).collect(),
+            provides: vec![Export { mode: ExportMode::Prepend, name: "PATH".to_string(), value: "/bin".to_string() }],
             fetch: None, // Cargo modules don't need fetch
             build: Some(ScriptBlock {
                 env: vec![],
@@ -53,13 +47,10 @@ mod tests {
     }
 
     fn create_test_tar_package() -> ModuleBlock {
-        let mut exports = HashMap::new();
-        exports.insert("PATH".to_string(), vec!["/bin".to_string()]);
-
         ModuleBlock {
             name: "hello".to_string(),
             depends_on: vec![],
-            exports: exports.into_iter().flat_map(|(k, vs)| vs.into_iter().map(move |v| (k.clone(), v))).collect(),
+            provides: vec![Export { mode: ExportMode::Prepend, name: "PATH".to_string(), value: "/bin".to_string() }],
             fetch: Some(FetchBlock {
                 spec: FetchSpec::Http(HttpSpec {
                     url: "https://ftp.gnu.org/gnu/hello/hello-2.12.tar.gz".to_string(),
@@ -90,8 +81,8 @@ mod tests {
         
         let expected = r#"module fd {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {
@@ -121,8 +112,8 @@ mod tests {
         
         let expected = r#"module bat {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         cargo install bat --version 0.24.0 --root ${DIST_PATH}
@@ -145,8 +136,8 @@ mod tests {
         
         let expected = r#"module hello {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -185,7 +176,7 @@ mod tests {
 
         assert_eq!(parsed_package.name, original_package.name);
         assert_eq!(parsed_package.depends_on, original_package.depends_on);
-        assert_eq!(parsed_package.exports, original_package.exports);
+        assert_eq!(parsed_package.provides, original_package.provides);
 
         // Check fetch block
         assert!(parsed_package.fetch.is_some());
@@ -232,7 +223,7 @@ mod tests {
 
         assert_eq!(parsed_package.name, original_package.name);
         assert_eq!(parsed_package.depends_on, original_package.depends_on);
-        assert_eq!(parsed_package.exports, original_package.exports);
+        assert_eq!(parsed_package.provides, original_package.provides);
 
         // Cargo modules should not have fetch block
         assert!(parsed_package.fetch.is_none());
@@ -269,7 +260,7 @@ mod tests {
 
         assert_eq!(parsed_package.name, original_package.name);
         assert_eq!(parsed_package.depends_on, original_package.depends_on);
-        assert_eq!(parsed_package.exports, original_package.exports);
+        assert_eq!(parsed_package.provides, original_package.provides);
 
         // Check fetch block
         assert!(parsed_package.fetch.is_some());
@@ -368,8 +359,8 @@ mod tests {
         
         let expected = r#"module bat {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         cargo install bat --version 0.24.0 --root ${DIST_PATH}
@@ -378,8 +369,8 @@ mod tests {
 
 module fd {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {

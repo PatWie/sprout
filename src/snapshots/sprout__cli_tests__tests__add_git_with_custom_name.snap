@@ -4,8 +4,8 @@ expression: manifest_content
 ---
 module fzf {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {
@@ -21,8 +21,8 @@ module fzf {
 
 module gcc {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -42,8 +42,8 @@ module gcc {
 
 module go {
     depends_on = []
-    exports = {
-        PATH = "/go/bin"
+    provides = {
+        prepend PATH = "/go/bin"
     }
     fetch {
         http = {
@@ -58,8 +58,8 @@ module go {
 
 module go-tools {
     depends_on = [go]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -73,8 +73,8 @@ module go-tools {
 
 module neovim {
     depends_on = [gcc]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {
@@ -108,8 +108,8 @@ module nvim {
 
 module rust {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -124,8 +124,8 @@ module rust {
 
 module rust-tools {
     depends_on = [rust]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -140,8 +140,8 @@ module rust-tools {
 
 module test {
     depends_on = [go]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {

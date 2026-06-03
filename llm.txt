@@ -31,9 +31,9 @@ Sprout manages dotfiles (via symlinks) and builds software dependencies from sou
 ```sprout
 module <name> {
     depends_on = [<module1>, <module2>, ...]
-    exports = {
-        <VAR_NAME> = "<relative-path>"
-        <VAR_NAME> = "<relative-path>"
+    provides = {
+        <verb> <VAR_NAME> = "<relative-path>"
+        <verb> <VAR_NAME> = "<relative-path>"
     }
     fetch {
         <fetch-spec>
@@ -53,7 +53,7 @@ module <name> {
 
 - **name**: Module identifier (alphanumeric, hyphens, underscores)
 - **depends_on**: Array of module names (can be empty `[]`)
-- **exports**: Map of environment variables to relative paths (can be empty `{}`)
+- **provides**: Map of environment variables to relative paths, each with a mode verb `set`/`prepend`/`append` (can be empty `{}`)
 
 ### Optional Fields
 
@@ -148,23 +148,29 @@ module neovim {
 - You must explicitly point to `${SPROUT_DIST}/<dep>/bin` in env block
 - This ensures reproducible builds using your managed toolchain
 
-### Exports Block
+### Provides Block
 
-Defines environment variables for the module. Paths are relative to `${DIST_PATH}`:
+Declares environment variables the module contributes when active. Paths are relative to `${DIST_PATH}`. Every entry MUST begin with a mode verb:
 
 ```sprout
-exports = {
-    PATH = "/bin"                       # Adds ${DIST_PATH}/bin to PATH
-    LD_LIBRARY_PATH = "/lib64"          # Adds ${DIST_PATH}/lib64
-    LD_LIBRARY_PATH = "/lib"            # Multiple values allowed (appended)
-    CARGO_HOME = "/cargo"               # Custom variables
+provides = {
+    prepend PATH = "/bin"                  # Prepend ${DIST_PATH}/bin to PATH (this module wins)
+    prepend LD_LIBRARY_PATH = "/lib64"     # Prepend ${DIST_PATH}/lib64
+    prepend LD_LIBRARY_PATH = "/lib"       # Multiple prepends allowed (joined with ':')
+    append  MANPATH = "/share/man"         # Append after any existing value
+    set     CARGO_HOME = "/cargo"          # Scalar: overwrite with a single directory
 }
 ```
 
+**Mode verbs (required, no default):**
+- `set` — scalar assignment; overwrites any existing value. Use for single-directory variables like `CARGO_HOME`, `RUSTUP_HOME`. Idempotent across re-sourcing.
+- `prepend` — insert before any existing colon-separated value (this module takes precedence). Use for `PATH`, `LD_LIBRARY_PATH`, etc.
+- `append` — insert after any existing colon-separated value.
+
 **Rules:**
 - Paths must start with `/` (relative to module's dist directory)
-- Multiple entries with same key are allowed (all values exported)
-- Variables are exported when environment is activated
+- Multiple entries with the same key are joined in order (for `prepend`/`append`)
+- Variables are exported when the environment is activated
 
 ### Environments Block
 
@@ -198,8 +204,8 @@ eval "$(sprout env generate dev)"       # Activates "dev"
 ```sprout
 module cmake {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -217,8 +223,8 @@ module cmake {
 ```sprout
 module neovim {
     depends_on = [gcc, cmake]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {
@@ -241,8 +247,8 @@ module neovim {
 ```sprout
 module rust-tools {
     depends_on = [rust]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -258,10 +264,10 @@ module rust-tools {
 ```sprout
 module gcc {
     depends_on = []
-    exports = {
-        PATH = "/bin"
-        LD_LIBRARY_PATH = "/lib64"
-        LD_LIBRARY_PATH = "/lib"
+    provides = {
+        prepend PATH = "/bin"
+        prepend LD_LIBRARY_PATH = "/lib64"
+        prepend LD_LIBRARY_PATH = "/lib"
     }
     fetch {
         http = {
@@ -357,8 +363,8 @@ sprout edit
 ```sprout
 module ripgrep {
     depends_on = [rust]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -439,7 +445,7 @@ sprout commit -m "Track bashrc and nvim config"
 - Use `sprout symlinks restore` after clone
 
 ### Environment Variables
-- Exports are relative to `${DIST_PATH}`
+- Provided paths are relative to `${DIST_PATH}`
 - Multiple values for same variable are concatenated
 - Variables expanded in build env blocks
 - Use `eval "$(sprout env generate)"` to activate

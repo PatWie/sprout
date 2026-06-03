@@ -88,7 +88,7 @@ fn parse_module_block(pair: pest::iterators::Pair<Rule>) -> Result<ModuleBlock> 
     let name = module_id.as_str().to_string();
 
     let mut depends_on = Vec::new();
-    let mut exports = Vec::new();
+    let mut provides = Vec::new();
     let mut fetch = None;
     let mut build = None;
 
@@ -107,9 +107,9 @@ fn parse_module_block(pair: pest::iterators::Pair<Rule>) -> Result<ModuleBlock> 
                         debug!("Parsing depends_on field");
                         depends_on = parse_array(inner_field.into_inner().next().unwrap())?;
                     }
-                    Rule::exports_field => {
-                        debug!("Parsing exports field");
-                        exports = parse_exports_map(inner_field.into_inner().next().unwrap())?;
+                    Rule::provides_field => {
+                        debug!("Parsing provides field");
+                        provides = parse_provides_map(inner_field.into_inner().next().unwrap())?;
                     }
                     Rule::fetch_block => {
                         debug!("Parsing fetch block");
@@ -136,9 +136,9 @@ fn parse_module_block(pair: pest::iterators::Pair<Rule>) -> Result<ModuleBlock> 
                 debug!("Parsing depends_on field");
                 depends_on = parse_array(field.into_inner().next().unwrap())?;
             }
-            Rule::exports_field => {
-                debug!("Parsing exports field");
-                exports = parse_exports_map(field.into_inner().next().unwrap())?;
+            Rule::provides_field => {
+                debug!("Parsing provides field");
+                provides = parse_provides_map(field.into_inner().next().unwrap())?;
             }
             Rule::fetch_block => {
                 debug!("Parsing fetch block");
@@ -162,7 +162,7 @@ fn parse_module_block(pair: pest::iterators::Pair<Rule>) -> Result<ModuleBlock> 
     Ok(ModuleBlock {
         name,
         depends_on,
-        exports,
+        provides,
         fetch,
         build,
         update,
@@ -383,17 +383,32 @@ fn parse_array(pair: pest::iterators::Pair<Rule>) -> Result<Vec<String>> {
     Ok(result)
 }
 
-fn parse_exports_map(pair: pest::iterators::Pair<Rule>) -> Result<Vec<(String, String)>> {
+fn parse_provides_map(pair: pest::iterators::Pair<Rule>) -> Result<Vec<Export>> {
     let mut result = Vec::new();
 
     for entry in pair.into_inner() {
+        // provides_entry = export_mode ~ identifier ~ "=" ~ string
         let mut entry_inner = entry.into_inner();
-        let key = entry_inner.next().unwrap().as_str().to_string();
-        let value = entry_inner.next().unwrap();
 
-        // exports_entry always has a string value
-        let parsed_value = parse_string(value)?;
-        result.push((key, parsed_value));
+        let mode_pair = entry_inner
+            .next()
+            .ok_or_else(|| anyhow!("provides entry missing mode verb"))?;
+        let mode = ExportMode::from_keyword(mode_pair.as_str())
+            .ok_or_else(|| anyhow!("Invalid export mode '{}'", mode_pair.as_str()))?;
+
+        let name = entry_inner
+            .next()
+            .ok_or_else(|| anyhow!("provides entry missing variable name"))?
+            .as_str()
+            .to_string();
+        assert!(!name.is_empty(), "grammar guarantees a non-empty identifier");
+
+        let value_pair = entry_inner
+            .next()
+            .ok_or_else(|| anyhow!("provides entry missing value"))?;
+        let value = parse_string(value_pair)?;
+
+        result.push(Export { mode, name, value });
     }
 
     Ok(result)

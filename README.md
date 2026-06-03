@@ -69,8 +69,8 @@ sprout init --empty [path]
 ```sprout
 module cmake {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -83,8 +83,8 @@ module cmake {
 }
 module gcc {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {

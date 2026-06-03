@@ -7,7 +7,7 @@ fn test_parse_simple_package() {
     let input = r#"
 module clang {
     depends_on = ["gcc"]
-    exports = { PATH = "/bin" }
+    provides = { prepend PATH = "/bin" }
 
     fetch {
         git = {

@@ -787,7 +787,7 @@ mod tests {
         let module1 = ModuleBlock {
             name: "test".to_string(),
             depends_on: vec![],
-            exports: vec![],
+            provides: vec![],
             fetch: Some(fetch1),
             build: None,
             update: None,
@@ -796,7 +796,7 @@ mod tests {
         let module2 = ModuleBlock {
             name: "test".to_string(),
             depends_on: vec![],
-            exports: vec![],
+            provides: vec![],
             fetch: Some(fetch2),
             build: None,
             update: None,
@@ -830,7 +830,7 @@ mod tests {
         let module1 = ModuleBlock {
             name: "test".to_string(),
             depends_on: vec![],
-            exports: vec![],
+            provides: vec![],
             fetch: None,
             build: Some(build1),
             update: None,
@@ -839,7 +839,7 @@ mod tests {
         let module2 = ModuleBlock {
             name: "test".to_string(),
             depends_on: vec![],
-            exports: vec![],
+            provides: vec![],
             fetch: None,
             build: Some(build2),
             update: None,
@@ -866,7 +866,7 @@ mod tests {
         let module1 = ModuleBlock {
             name: "test".to_string(),
             depends_on: vec![],
-            exports: vec![],
+            provides: vec![],
             fetch: None,
             build: Some(build1),
             update: None,
@@ -875,7 +875,7 @@ mod tests {
         let module2 = ModuleBlock {
             name: "test".to_string(),
             depends_on: vec![],
-            exports: vec![],
+            provides: vec![],
             fetch: None,
             build: Some(build2),
             update: None,

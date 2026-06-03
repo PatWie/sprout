@@ -11,7 +11,7 @@ module_id = { identifier }
 
 module_field = {
     depends_on_field |
-    exports_field |
+    provides_field |
     fetch_block |
     build_block |
     install_block |
@@ -19,7 +19,7 @@ module_field = {
 }
 
 depends_on_field = { "depends_on" ~ "=" ~ array }
-exports_field = { "exports" ~ "=" ~ exports_map }
+provides_field = { "provides" ~ "=" ~ provides_map }
 
 // Fetch block
 fetch_block = { "fetch" ~ "{" ~ fetch_field* ~ "}" }
@@ -80,9 +80,12 @@ array = { "[" ~ (value ~ ("," ~ value)*)? ~ "]" }
 map = { "{" ~ (map_entry ~ ("," ~ map_entry)*)? ~ "}" }
 map_entry = { identifier ~ "=" ~ value }
 
-// Exports map - values must be quoted strings, no commas required
-exports_map = { "{" ~ exports_entry* ~ "}" }
-exports_entry = { identifier ~ "=" ~ string }
+// Provides map - each entry has a mandatory leading mode verb, then a quoted
+// string value. The verb (set/prepend/append) must be explicit; there is no
+// default, so scalar and search-path variables can never be confused.
+provides_map = { "{" ~ provides_entry* ~ "}" }
+provides_entry = { export_mode ~ identifier ~ "=" ~ string }
+export_mode = { "set" | "prepend" | "append" }
 
 // Value can be either quoted string or unquoted value
 value = { string | unquoted_value }

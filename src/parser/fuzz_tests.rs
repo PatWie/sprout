@@ -30,12 +30,12 @@ mod tests {
             "module name { build }",
             "module name { build { } }",
             "module name { build { make } }",
-            "module name { exports }",
-            "module name { exports { } }",
-            "module name { exports { PATH } }",
-            "module name { exports { PATH = } }",
-            "module name { exports { PATH = [] } }",
-            "module name { exports { PATH = [\"/bin\"] } }",
+            "module name { provides }",
+            "module name { provides { } }",
+            "module name { provides { PATH } }",
+            "module name { provides { PATH = } }",
+            "module name { provides { PATH = [] } }",
+            "module name { provides { PATH = [\"/bin\"] } }",
         ];
 
         for input in test_cases {
@@ -68,12 +68,24 @@ mod tests {
     }
 
     #[test]
+    fn test_provides_requires_explicit_verb() {
+        // A provides entry without a mode verb must be rejected (no default).
+        assert!(parse_manifest("module m { provides = { PATH = \"/bin\" } }").is_err());
+        // Each of the three verbs parses.
+        assert!(parse_manifest("module m { provides = { set CARGO_HOME = \"/cargo\" } }").is_ok());
+        assert!(parse_manifest("module m { provides = { prepend PATH = \"/bin\" } }").is_ok());
+        assert!(parse_manifest("module m { provides = { append MANPATH = \"/man\" } }").is_ok());
+        // An unknown verb is rejected.
+        assert!(parse_manifest("module m { provides = { upsert PATH = \"/bin\" } }").is_err());
+    }
+
+    #[test]
     fn test_parser_with_unicode_and_special_chars() {
         let unicode_cases = vec![
             "module 测试@1.0 { }",
             "module name { fetch { git { url = \"https://github.com/用户/项目.git\" } } }",
             "module name { build { echo \"Hello 世界\" } }",
-            "module name { exports { PATH = [\"/usr/bin/测试\"] } }",
+            "module name { provides { PATH = [\"/usr/bin/测试\"] } }",
             "module name { depends_on = [\"依赖@1.0\"] }",
         ];
 

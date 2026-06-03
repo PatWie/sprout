@@ -1,11 +1,11 @@
 module clang {
     depends_on = [gcc, cmake]
-    exports = {
-        PATH = "/bin"
-        LD_LIBRARY_PATH = "/lib64"
-        LD_LIBRARY_PATH = "/lib"
-        CPLUS_INCLUDE_PATH = "/include/c++/v1"
-        LIBRARY_PATH = "/lib64"
+    provides = {
+        prepend PATH = "/bin"
+        prepend LD_LIBRARY_PATH = "/lib64"
+        prepend LD_LIBRARY_PATH = "/lib"
+        prepend CPLUS_INCLUDE_PATH = "/include/c++/v1"
+        prepend LIBRARY_PATH = "/lib64"
     }
     fetch {
         http = {
@@ -30,8 +30,8 @@ module clang {
 }
 module lua {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -48,8 +48,8 @@ module lua {
 
 module luarocks {
     depends_on = [lua]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -71,8 +71,8 @@ module luarocks {
 
 module python3 {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -90,8 +90,8 @@ module python3 {
 
 module python-tools {
     depends_on = [python3]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -106,8 +106,8 @@ module python-tools {
 
 module cmake {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -122,8 +122,8 @@ module cmake {
 
 module ffmpeg {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -140,8 +140,8 @@ module ffmpeg {
 
 module fzf {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {
@@ -162,10 +162,10 @@ module fzf {
 
 module gcc {
     depends_on = []
-    exports = {
-        LD_LIBRARY_PATH = "/lib"
-        LD_LIBRARY_PATH = "/lib64"
-        PATH = "/bin"
+    provides = {
+        prepend LD_LIBRARY_PATH = "/lib"
+        prepend LD_LIBRARY_PATH = "/lib64"
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -186,8 +186,8 @@ module gcc {
 
 module go {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -202,8 +202,8 @@ module go {
 
 module go-tools {
     depends_on = [go]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -218,8 +218,8 @@ module go-tools {
 
 module goreleaser {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -235,8 +235,8 @@ module goreleaser {
 
 module neovim {
     depends_on = [clang, cmake]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {
@@ -259,8 +259,8 @@ module neovim {
 
 module ruby {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -278,8 +278,8 @@ module ruby {
 
 module ruby-tools {
     depends_on = [ruby]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -293,8 +293,8 @@ module ruby-tools {
 
 module rust {
     depends_on = []
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         http = {
@@ -310,8 +310,8 @@ module rust {
 
 module rust-tools {
     depends_on = [rust]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -331,8 +331,8 @@ module rust-tools {
 
 module test {
     depends_on = [go]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     build {
         env {
@@ -349,8 +349,8 @@ module test {
 
 module tmux {
     depends_on = [gcc]
-    exports = {
-        PATH = "/bin"
+    provides = {
+        prepend PATH = "/bin"
     }
     fetch {
         git = {
@@ -373,8 +373,8 @@ module tmux {
 
 module zig {
     depends_on = []
-    exports = {
-        PATH = "/"
+    provides = {
+        prepend PATH = "/"
     }
     fetch {
         http = {
